@@ -39,7 +39,8 @@ export default function Documents() {
 
   const upload = async () => {
     if (!f.file) return
-    const path = `company/${Date.now()}_${f.file.name}`
+    const ext = f.file.name.includes('.') ? f.file.name.split('.').pop().toLowerCase().replace(/[^a-z0-9]/g, '') : 'bin'
+    const path = `company/${Date.now()}.${ext}`
     const { error: upErr } = await supabase.storage.from('docs').upload(path, f.file)
     if (upErr) { alert(upErr.message); return }
     const { error } = await supabase.from('documents').insert({
