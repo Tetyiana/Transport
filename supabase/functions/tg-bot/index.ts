@@ -84,6 +84,7 @@ function tripText(t: Record<string, any>) {
     t.loading_date ? `Завантаження: ${t.loading_date}` : null,
     t.customs_info ? `Замитнення/розмитнення: ${t.customs_info}` : null,
     ...routePoints(t).map(([label, place, coords]) => `${label}: ${[place, coords].filter(Boolean).join(' — ')}`),
+    t.rmpd_number ? `Зголошення RMPD/SENT: ${t.rmpd_number}` : null,
     t.expeditor_contact ? `Експедитор: ${t.expeditor_contact}` : null,
     t.route_plan ? `Маршрут: ${t.route_plan}` : null,
     t.odometer_start ? `Спідометр на початок: ${t.odometer_start}` : null,

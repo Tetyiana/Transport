@@ -196,6 +196,7 @@ export default function TripCard() {
     t.loading_date ? `Завантаження: ${t.loading_date}` : null,
     t.customs_info ? `Замитнення/розмитнення: ${t.customs_info}` : null,
     ...routePoints.map(([label, place, coords]) => `${label}: ${[place, coords].filter(Boolean).join(' — ')}`),
+    t.rmpd_number ? `Зголошення RMPD/SENT: ${t.rmpd_number}` : null,
     t.expeditor_contact ? `Експедитор: ${t.expeditor_contact}` : null,
     t.route_plan ? `Маршрут: ${t.route_plan}` : null,
     driveDays ? `Орієнтовно ${Math.round(driveH)} год кермування, ~${driveDays} діб по тахо` : null,
@@ -266,6 +267,7 @@ export default function TripCard() {
             <div><label>Пункт пропуску (координати)</label><input value={ef.border_coords || ''} onChange={setE('border_coords')} placeholder="51.19, 23.85" /></div>
             <div><label>Розмитнення (місце)</label><input value={ef.customs_in_point || ''} onChange={setE('customs_in_point')} /></div>
             <div><label>Розмитнення (координати)</label><input value={ef.customs_in_coords || ''} onChange={setE('customs_in_coords')} placeholder="52.22, 21.01" /></div>
+            <div><label>Номер зголошення RMPD/SENT</label><input value={ef.rmpd_number || ''} onChange={setE('rmpd_number')} /></div>
             <div><label>Контакт експедитора</label><input value={ef.expeditor_contact || ''} onChange={setE('expeditor_contact')} /></div>
             <div style={{ gridColumn: '1 / -1' }}><label>Маршрут для водія</label>
               <textarea rows={2} value={ef.route_plan || ''} onChange={setE('route_plan')} placeholder="Київ — Ягодин — Варшава — ..." /></div>
