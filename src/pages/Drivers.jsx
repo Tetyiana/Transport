@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabase'
 import { PAY_SCHEMES, schemeLabel } from '../dicts'
+import { longPress } from '../longpress'
 
 const empty = { full_name: '', phone: '', pay_scheme: 'percent_freight', pay_percent: '', rate_km_ua: '', rate_km_abroad: '', rate_per_trip: '', taxes_included: true }
 
@@ -74,7 +75,7 @@ export default function Drivers() {
         <table>
           <thead><tr><th>ПІБ</th><th>Телефон</th><th>Схема ЗП</th><th>Ставка</th><th>Податки</th><th></th><th>Telegram</th></tr></thead>
           <tbody>{list.map(d => (
-            <tr key={d.id}>
+            <tr key={d.id} {...longPress(() => edit(d))}>
               <td>{d.full_name}</td><td>{d.phone}</td>
               <td><span className="badge">{schemeLabel(d.pay_scheme)}</span></td>
               <td>{d.pay_percent ? `${d.pay_percent}%` : d.rate_per_trip ? d.rate_per_trip : (d.rate_km_ua || d.rate_km_abroad) ? `${d.rate_km_ua ?? '—'} / ${d.rate_km_abroad ?? '—'} за км` : '—'}</td>

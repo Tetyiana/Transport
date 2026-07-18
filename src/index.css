@@ -90,3 +90,5 @@ label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px
   .g2, .g3, .g4 { grid-template-columns: 1fr; }
   table { display: block; overflow-x: auto; }
 }
+
+.pressable { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }

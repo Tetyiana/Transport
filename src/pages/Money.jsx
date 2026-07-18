@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { payFormLabel, PAY_FORMS } from '../dicts'
+import { longPress } from '../longpress'
 
 const csvExport = (rows, name) => {
   if (!rows.length) return
@@ -26,6 +27,15 @@ export default function Money() {
   const [tab, setTab] = useState('incomes')
   const [exf, setExf] = useState({ vehicle_id: '', category_id: '', amount: '', payment_form: 'bank', expense_date: today(), note: '' })
   const [newCat, setNewCat] = useState('')
+  const [exEditId, setExEditId] = useState(null)
+  const nav = useNavigate()
+
+  const editExpense = (e) => {
+    setExf({ vehicle_id: e.vehicle_id || '', category_id: e.category_id || '', amount: e.amount,
+      payment_form: e.payment_form || 'bank', expense_date: e.expense_date, note: e.note || '' })
+    setExEditId(e.id); setTab('expenses')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   const load = () => {
     supabase.from('incomes').select('*, trip:trip_id(number, route_from, route_to), counterparty:counterparty_id(name)')
@@ -43,10 +53,14 @@ export default function Money() {
     await supabase.from('incomes').update({ prro_done: true, in_tax_base: true }).eq('id', i.id); load()
   }
   const addExpense = async () => {
-    if (!exf.category_id || !exf.amount || !exf.vehicle_id) { alert('Вкажіть машину, категорію і суму'); return }
-    const { error } = await supabase.from('expenses').insert(exf)
+    if (!exf.category_id || !exf.amount || (!exf.vehicle_id && !exEditId)) { alert('Вкажіть машину, категорію і суму'); return }
+    const rec = { ...exf, vehicle_id: exf.vehicle_id || null, note: exf.note || null }
+    const { error } = exEditId
+      ? await supabase.from('expenses').update(rec).eq('id', exEditId)
+      : await supabase.from('expenses').insert(rec)
     if (error) { alert(error.message); return }
-    setExf({ vehicle_id: '', category_id: '', amount: '', payment_form: 'bank', expense_date: today(), note: '' }); load()
+    setExf({ vehicle_id: '', category_id: '', amount: '', payment_form: 'bank', expense_date: today(), note: '' })
+    setExEditId(null); load()
   }
   const addCategory = async () => {
     if (!newCat.trim()) return
@@ -82,7 +96,7 @@ export default function Money() {
           <table>
             <thead><tr><th>Дата</th><th>Рейс</th><th>Від кого</th><th>Сума</th><th>Форма</th><th>ПРРО</th><th></th></tr></thead>
             <tbody>{incomes.map(i => (
-              <tr key={i.id}>
+              <tr key={i.id} {...longPress(() => i.trip_id && nav(`/trips/${i.trip_id}`))}>
                 <td>{i.income_date}</td>
                 <td>{i.trip ? <Link to={`/trips/${i.trip_id}`}>{i.trip.number || `${i.trip.route_from} → ${i.trip.route_to}`}</Link> : '—'}</td>
                 <td>{i.counterparty?.name || '—'}</td>
@@ -99,7 +113,7 @@ export default function Money() {
 
       {tab === 'expenses' && (<>
         <div className="panel">
-          <h2 style={{ marginTop: 0 }}>Витрата на машину (поза рейсом)</h2>
+          <h2 style={{ marginTop: 0 }}>{exEditId ? 'Редагування витрати' : 'Витрата на машину (поза рейсом)'}</h2>
           <div className="grid g4">
             <div><label>Машина</label>
               <select value={exf.vehicle_id} onChange={e => setExf({ ...exf, vehicle_id: e.target.value })}>
@@ -119,7 +133,7 @@ export default function Money() {
               </select></div>
             <div><label>Примітка</label><input value={exf.note} onChange={e => setExf({ ...exf, note: e.target.value })} /></div>
           </div>
-          <div style={{ marginTop: 10 }}><button className="small" onClick={addExpense}>Додати витрату</button></div>
+          <div style={{ marginTop: 10 }} className="row"><button className="small" onClick={addExpense}>{exEditId ? 'Зберегти зміни' : 'Додати витрату'}</button>{exEditId && <button className="small secondary" onClick={() => { setExEditId(null); setExf({ vehicle_id: '', category_id: '', amount: '', payment_form: 'bank', expense_date: today(), note: '' }) }}>Скасувати</button>}</div>
           <div className="row" style={{ marginTop: 14 }}>
             <input style={{ width: 220 }} placeholder="Нова категорія витрат" value={newCat} onChange={e => setNewCat(e.target.value)} />
             <button className="small secondary" onClick={addCategory}>Додати категорію</button>
@@ -127,15 +141,16 @@ export default function Money() {
         </div>
         <div className="panel">
           <table>
-            <thead><tr><th>Дата</th><th>Категорія</th><th>Рейс / Машина</th><th>Сума</th><th>Форма</th><th>Примітка</th></tr></thead>
+            <thead><tr><th>Дата</th><th>Категорія</th><th>Рейс / Машина</th><th>Сума</th><th>Форма</th><th>Примітка</th><th></th></tr></thead>
             <tbody>{expenses.map(e => (
-              <tr key={e.id}>
+              <tr key={e.id} {...longPress(() => editExpense(e))}>
                 <td>{e.expense_date}</td>
                 <td>{e.category?.name}</td>
                 <td>{e.trip ? <Link to={`/trips/${e.trip_id}`}>{e.trip.number || `${e.trip.route_from} → ${e.trip.route_to}`}</Link> : (e.vehicle?.name || '—')}</td>
                 <td>{fmt(e.amount)} {e.currency}</td>
                 <td>{payFormLabel(e.payment_form)}</td>
                 <td>{e.note}</td>
+                <td><button className="small secondary" onClick={() => editExpense(e)}>Редагувати</button></td>
               </tr>
             ))}</tbody>
           </table>

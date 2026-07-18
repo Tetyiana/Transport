@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabase'
 import { CP_TYPES, cpTypeLabel, CONTRACT_FORMS } from '../dicts'
+import { longPress } from '../longpress'
 
 const empty = { type: 'expedition', name: '', edrpou: '', contract_form: '', payment_terms_days: '', notes: '' }
 
@@ -9,6 +10,14 @@ export default function Counterparties() {
   const [filter, setFilter] = useState('all')
   const [f, setF] = useState(empty)
   const [show, setShow] = useState(false)
+  const [editId, setEditId] = useState(null)
+
+  const edit = (c) => {
+    const rec = { ...empty }
+    for (const k of Object.keys(empty)) rec[k] = c[k] ?? ''
+    setF(rec); setEditId(c.id); setShow(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   const load = () => supabase.from('counterparties').select('*').order('name').then(({ data }) => setList(data || []))
   useEffect(() => { load() }, [])
@@ -18,9 +27,11 @@ export default function Counterparties() {
     const rec = { ...f }
     if (!rec.contract_form) rec.contract_form = null
     if (rec.payment_terms_days === '') rec.payment_terms_days = null
-    const { error } = await supabase.from('counterparties').insert(rec)
+    const { error } = editId
+      ? await supabase.from('counterparties').update(rec).eq('id', editId)
+      : await supabase.from('counterparties').insert(rec)
     if (error) { alert(error.message); return }
-    setF(empty); setShow(false); load()
+    setF(empty); setEditId(null); setShow(false); load()
   }
 
   const shown = list.filter(c => filter === 'all' || c.type === filter)
@@ -29,7 +40,7 @@ export default function Counterparties() {
     <div>
       <div className="spread">
         <h1>Контрагенти</h1>
-        <button onClick={() => setShow(!show)}>{show ? 'Сховати' : '+ Додати'}</button>
+        <button onClick={() => { if (show) { setShow(false); setEditId(null); setF(empty) } else setShow(true) }}>{show ? 'Сховати' : '+ Додати'}</button>
       </div>
       {show && (
         <div className="panel">
@@ -48,7 +59,7 @@ export default function Counterparties() {
             <div><label>Термін оплати, днів</label><input type="number" value={f.payment_terms_days} onChange={e => setF({ ...f, payment_terms_days: e.target.value })} /></div>
             <div><label>Примітки</label><input value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} /></div>
           </div>
-          <div style={{ marginTop: 12 }}><button onClick={save}>Зберегти</button></div>
+          <div style={{ marginTop: 12 }}><button onClick={save}>{editId ? 'Зберегти зміни' : 'Зберегти'}</button></div>
         </div>
       )}
       <div className="row" style={{ marginBottom: 12 }}>
@@ -59,11 +70,12 @@ export default function Counterparties() {
       </div>
       <div className="panel">
         <table>
-          <thead><tr><th>Назва</th><th>Тип</th><th>ЄДРПОУ</th><th>Оплата, днів</th><th>Примітки</th></tr></thead>
+          <thead><tr><th>Назва</th><th>Тип</th><th>ЄДРПОУ</th><th>Оплата, днів</th><th>Примітки</th><th></th></tr></thead>
           <tbody>{shown.map(c => (
-            <tr key={c.id}>
+            <tr key={c.id} {...longPress(() => edit(c))}>
               <td>{c.name}</td><td><span className="badge">{cpTypeLabel(c.type)}</span></td>
               <td>{c.edrpou || '—'}</td><td>{c.payment_terms_days ?? '—'}</td><td>{c.notes}</td>
+              <td><button className="small secondary" onClick={() => edit(c)}>Редагувати</button></td>
             </tr>
           ))}</tbody>
         </table>

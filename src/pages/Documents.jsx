@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabase'
 import { STAT_DOC_TYPES, docTypeLabel } from '../dicts'
+import { longPress } from '../longpress'
 
 export default function Documents() {
   const [docs, setDocs] = useState([])
@@ -8,6 +9,13 @@ export default function Documents() {
   const [drivers, setDrivers] = useState([])
   const [f, setF] = useState({ doc_type: 'fop_extract', title: '', vehicle_id: '', driver_id: '', file: null })
   const [assets, setAssets] = useState({ stamp: false, sign: false })
+  const [editId, setEditId] = useState(null)
+
+  const edit = (d) => {
+    setF({ doc_type: d.doc_type, title: d.title || '', vehicle_id: d.vehicle_id || '', driver_id: d.driver_id || '', file: null })
+    setEditId(d.id)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   const loadAssets = () => {
     supabase.storage.from('docs').list('company/assets').then(({ data }) => {
@@ -38,6 +46,15 @@ export default function Documents() {
   }
 
   const upload = async () => {
+    if (editId) {
+      const { error } = await supabase.from('documents').update({
+        doc_type: f.doc_type, title: f.title || null,
+        vehicle_id: f.vehicle_id || null, driver_id: f.driver_id || null,
+      }).eq('id', editId)
+      if (error) { alert(error.message); return }
+      setF({ doc_type: 'fop_extract', title: '', vehicle_id: '', driver_id: '', file: null }); setEditId(null); load()
+      return
+    }
     if (!f.file) return
     const ext = f.file.name.includes('.') ? f.file.name.split('.').pop().toLowerCase().replace(/[^a-z0-9]/g, '') : 'bin'
     const path = `company/${Date.now()}.${ext}`
@@ -85,7 +102,7 @@ export default function Documents() {
         </div>
         <div className="row" style={{ marginTop: 10 }}>
           <input type="file" style={{ width: 'auto' }} onChange={e => setF({ ...f, file: e.target.files[0] })} />
-          <button className="small" onClick={upload}>Завантажити</button>
+          <button className="small" onClick={upload}>{editId ? 'Зберегти зміни' : 'Завантажити'}</button>
         </div>
       </div>
       <div className="panel">
@@ -106,11 +123,11 @@ export default function Documents() {
         <table>
           <thead><tr><th>Тип</th><th>Назва</th><th>Машина / Водій</th><th></th><th></th></tr></thead>
           <tbody>{docs.map(d => (
-            <tr key={d.id}>
+            <tr key={d.id} {...longPress(() => edit(d))}>
               <td><span className="badge">{docTypeLabel(d.doc_type)}</span></td>
               <td><a onClick={() => open(d)} style={{ cursor: 'pointer' }}>{d.title}</a></td>
               <td>{d.vehicle?.name || d.driver?.full_name || '—'}</td>
-              <td><button className="small secondary" onClick={() => open(d)}>Відкрити</button></td>
+              <td><button className="small secondary" onClick={() => open(d)}>Відкрити</button> <button className="small secondary" onClick={() => edit(d)}>Редагувати</button></td>
               <td><button className="small danger-btn" onClick={() => remove(d)}>Видалити</button></td>
             </tr>
           ))}</tbody>
