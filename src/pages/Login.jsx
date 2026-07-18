@@ -17,7 +17,7 @@ export default function Login() {
   return (
     <div className="login-wrap">
       <div className="panel login-box">
-        <h1>Transport</h1>
+        <h1>TirKolija</h1>
         <div className="grid">
           <div>
             <label>Пошта</label>

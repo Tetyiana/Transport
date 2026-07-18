@@ -27,7 +27,7 @@ export default function App() {
   return (
     <div className="layout">
       <nav className="sidebar">
-        <div className="brand">TRANSPORT</div>
+        <div className="brand">TirKolija</div>
         <NavLink to="/" end>Дашборд</NavLink>
         <NavLink to="/trips">Рейси</NavLink>
         <NavLink to="/money">Гроші</NavLink>
