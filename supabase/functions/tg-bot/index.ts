@@ -59,6 +59,11 @@ async function activeTrip(driver_id: string) {
   return data?.[0] ?? null
 }
 
+function mapsUrl(t: Record<string, any>) {
+  if (!t.route_from || !t.route_to) return null
+  return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(t.route_from)}&destination=${encodeURIComponent(t.route_to)}`
+}
+
 function tripText(t: Record<string, any>) {
   return [
     `Рейс ${t.number || ''} ${t.route_from || ''} → ${t.route_to || ''}`.trim(),
@@ -69,6 +74,7 @@ function tripText(t: Record<string, any>) {
     t.route_plan ? `Маршрут: ${t.route_plan}` : null,
     t.odometer_start ? `Спідометр на початок: ${t.odometer_start}` : null,
     t.odometer_end ? `Спідометр на кінець: ${t.odometer_end}` : null,
+    mapsUrl(t) ? `\n🗺 Маршрут на карті:\n${mapsUrl(t)}` : null,
   ].filter(Boolean).join('\n')
 }
 

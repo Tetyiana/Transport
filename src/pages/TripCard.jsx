@@ -169,6 +169,10 @@ export default function TripCard() {
   }
   const markPaid = async (p) => { await supabase.from('driver_payroll').update({ paid: true, paid_date: today() }).eq('id', p.id); load() }
 
+  const mapsUrl = t?.route_from && t?.route_to
+    ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(t.route_from)}&destination=${encodeURIComponent(t.route_to)}`
+    : null
+
   const driverMessage = () => [
     `Рейс ${t.number || ''} ${t.route_from || ''} → ${t.route_to || ''}`.trim(),
     t.loading_date ? `Завантаження: ${t.loading_date}` : null,
@@ -176,6 +180,7 @@ export default function TripCard() {
     t.expeditor_contact ? `Експедитор: ${t.expeditor_contact}` : null,
     t.route_plan ? `Маршрут: ${t.route_plan}` : null,
     driveDays ? `Орієнтовно ${Math.round(driveH)} год кермування, ~${driveDays} діб по тахо` : null,
+    mapsUrl ? `\n🗺 Маршрут на карті:\n${mapsUrl}` : null,
   ].filter(Boolean).join('\n')
 
   const sendToDriver = async () => {
@@ -252,6 +257,7 @@ export default function TripCard() {
             {driveDays && <span>По тахо: <b>≈ {Math.round(driveH)} год / {driveDays} діб</b></span>}
           </div>
           {t.mode === 'carrier' && <button className="small" onClick={sendToDriver}>Надіслати водію (Telegram)</button>}
+          {mapsUrl && <a href={mapsUrl} target="_blank" rel="noreferrer"><button className="small secondary">🗺 Маршрут на карті</button></a>}
         </div>
       </div>
 
