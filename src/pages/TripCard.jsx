@@ -73,6 +73,13 @@ export default function TripCard() {
     return `${Number(m[1]).toFixed(5)}, ${Number(m[2]).toFixed(5)}`
   }
 
+  const DateInput = ({ field }) => (
+    <div className="row" style={{ gap: 4, flexWrap: 'nowrap' }}>
+      <input type="date" value={ef[field] || ''} onChange={setE(field)} style={{ flex: 1 }} />
+      {ef[field] && <button className="small secondary" style={{ padding: '4px 8px' }} onClick={() => setEf({ ...ef, [field]: '' })}>✕</button>}
+    </div>
+  )
+
   const saveEdit = async () => {
     const upd = { ...ef }
     delete upd.customer; delete upd.carrier; delete upd.vehicle; delete upd.driver
@@ -268,12 +275,12 @@ export default function TripCard() {
             <div><label>Спідометр в'їзд</label><input type="number" value={ef.odometer_end || ''} onChange={setE('odometer_end')} /></div>
             <div><label>Км по Україні</label><input type="number" value={ef.km_ua || ''} onChange={setE('km_ua')} /></div>
             <div><label>Км за кордоном</label><input type="number" value={ef.km_abroad || ''} onChange={setE('km_abroad')} /></div>
-            <div><label>Дата завантаження</label><input type="date" value={ef.loading_date || ''} onChange={setE('loading_date')} /></div>
-            <div><label>Дата розвантаження</label><input type="date" value={ef.unloading_date || ''} onChange={setE('unloading_date')} /></div>
-            <div><label>ТТН відправлено</label><input type="date" value={ef.ttn_sent_date || ''} onChange={setE('ttn_sent_date')} /></div>
-            <div><label>Термін отримання ТТН</label><input type="date" value={ef.ttn_due_date || ''} onChange={setE('ttn_due_date')} /></div>
-            <div><label>Термін оплати</label><input type="date" value={ef.payment_due_date || ''} onChange={setE('payment_due_date')} /></div>
-            <div><label>Оплату отримано</label><input type="date" value={ef.payment_received_date || ''} onChange={setE('payment_received_date')} /></div>
+            <div><label>Дата завантаження</label><DateInput field="loading_date" /></div>
+            <div><label>Дата розвантаження</label><DateInput field="unloading_date" /></div>
+            <div><label>ТТН відправлено</label><DateInput field="ttn_sent_date" /></div>
+            <div><label>Термін отримання ТТН</label><DateInput field="ttn_due_date" /></div>
+            <div><label>Термін оплати</label><DateInput field="payment_due_date" /></div>
+            <div><label>Оплату отримано</label><DateInput field="payment_received_date" /></div>
             <div><label>Замитнення/розмитнення</label><input value={ef.customs_info || ''} onChange={setE('customs_info')} placeholder="місце, брокер" /></div>
             <div><label>Координати завантаження</label><input value={ef.route_from_coords || ''} onChange={setE('route_from_coords')} placeholder="50.4501, 30.5234" /></div>
             <div><label>Координати вивантаження</label><input value={ef.route_to_coords || ''} onChange={setE('route_to_coords')} placeholder="52.2297, 21.0122" /></div>
