@@ -169,14 +169,23 @@ export default function TripCard() {
   }
   const markPaid = async (p) => { await supabase.from('driver_payroll').update({ paid: true, paid_date: today() }).eq('id', p.id); load() }
 
-  const mapsUrl = t?.route_from && t?.route_to
-    ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(t.route_from)}&destination=${encodeURIComponent(t.route_to)}`
+  const pt = (place, coords) => (coords || place || '').trim()
+  const routePoints = t ? [
+    ['Завантаження', t.route_from, t.route_from_coords],
+    ['Замитнення', t.customs_out_point, t.customs_out_coords],
+    ['Пункт пропуску', t.border_point, t.border_coords],
+    ['Розмитнення', t.customs_in_point, t.customs_in_coords],
+    ['Вивантаження', t.route_to, t.route_to_coords],
+  ].filter(([, place, coords]) => place || coords) : []
+  const mapsUrl = routePoints.length >= 2
+    ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(pt(routePoints[0][1], routePoints[0][2]))}&destination=${encodeURIComponent(pt(routePoints.at(-1)[1], routePoints.at(-1)[2]))}${routePoints.length > 2 ? `&waypoints=${encodeURIComponent(routePoints.slice(1, -1).map(([, p, c]) => pt(p, c)).join('|'))}` : ''}`
     : null
 
   const driverMessage = () => [
     `Рейс ${t.number || ''} ${t.route_from || ''} → ${t.route_to || ''}`.trim(),
     t.loading_date ? `Завантаження: ${t.loading_date}` : null,
     t.customs_info ? `Замитнення/розмитнення: ${t.customs_info}` : null,
+    ...routePoints.map(([label, place, coords]) => `${label}: ${[place, coords].filter(Boolean).join(' — ')}`),
     t.expeditor_contact ? `Експедитор: ${t.expeditor_contact}` : null,
     t.route_plan ? `Маршрут: ${t.route_plan}` : null,
     driveDays ? `Орієнтовно ${Math.round(driveH)} год кермування, ~${driveDays} діб по тахо` : null,
@@ -239,6 +248,14 @@ export default function TripCard() {
             <div><label>Термін оплати</label><input type="date" value={ef.payment_due_date || ''} onChange={setE('payment_due_date')} /></div>
             <div><label>Оплату отримано</label><input type="date" value={ef.payment_received_date || ''} onChange={setE('payment_received_date')} /></div>
             <div><label>Замитнення/розмитнення</label><input value={ef.customs_info || ''} onChange={setE('customs_info')} placeholder="місце, брокер" /></div>
+            <div><label>Координати завантаження</label><input value={ef.route_from_coords || ''} onChange={setE('route_from_coords')} placeholder="50.4501, 30.5234" /></div>
+            <div><label>Координати вивантаження</label><input value={ef.route_to_coords || ''} onChange={setE('route_to_coords')} placeholder="52.2297, 21.0122" /></div>
+            <div><label>Замитнення (місце)</label><input value={ef.customs_out_point || ''} onChange={setE('customs_out_point')} /></div>
+            <div><label>Замитнення (координати)</label><input value={ef.customs_out_coords || ''} onChange={setE('customs_out_coords')} placeholder="50.45, 30.52" /></div>
+            <div><label>Пункт пропуску</label><input value={ef.border_point || ''} onChange={setE('border_point')} placeholder="Ягодин — Dorohusk" /></div>
+            <div><label>Пункт пропуску (координати)</label><input value={ef.border_coords || ''} onChange={setE('border_coords')} placeholder="51.19, 23.85" /></div>
+            <div><label>Розмитнення (місце)</label><input value={ef.customs_in_point || ''} onChange={setE('customs_in_point')} /></div>
+            <div><label>Розмитнення (координати)</label><input value={ef.customs_in_coords || ''} onChange={setE('customs_in_coords')} placeholder="52.22, 21.01" /></div>
             <div><label>Контакт експедитора</label><input value={ef.expeditor_contact || ''} onChange={setE('expeditor_contact')} /></div>
             <div style={{ gridColumn: '1 / -1' }}><label>Маршрут для водія</label>
               <textarea rows={2} value={ef.route_plan || ''} onChange={setE('route_plan')} placeholder="Київ — Ягодин — Варшава — ..." /></div>

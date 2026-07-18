@@ -59,9 +59,22 @@ async function activeTrip(driver_id: string) {
   return data?.[0] ?? null
 }
 
+function routePoints(t: Record<string, any>): [string, string, string][] {
+  return ([
+    ['Завантаження', t.route_from, t.route_from_coords],
+    ['Замитнення', t.customs_out_point, t.customs_out_coords],
+    ['Пункт пропуску', t.border_point, t.border_coords],
+    ['Розмитнення', t.customs_in_point, t.customs_in_coords],
+    ['Вивантаження', t.route_to, t.route_to_coords],
+  ] as [string, string, string][]).filter(([, place, coords]) => place || coords)
+}
+
 function mapsUrl(t: Record<string, any>) {
-  if (!t.route_from || !t.route_to) return null
-  return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(t.route_from)}&destination=${encodeURIComponent(t.route_to)}`
+  const pts = routePoints(t)
+  if (pts.length < 2) return null
+  const p = (x: [string, string, string]) => (x[2] || x[1] || '').trim()
+  const mid = pts.slice(1, -1).map(p).join('|')
+  return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(p(pts[0]))}&destination=${encodeURIComponent(p(pts.at(-1)!))}${mid ? `&waypoints=${encodeURIComponent(mid)}` : ''}`
 }
 
 function tripText(t: Record<string, any>) {
@@ -70,6 +83,7 @@ function tripText(t: Record<string, any>) {
     t.vehicle?.name ? `Машина: ${t.vehicle.name}` : null,
     t.loading_date ? `Завантаження: ${t.loading_date}` : null,
     t.customs_info ? `Замитнення/розмитнення: ${t.customs_info}` : null,
+    ...routePoints(t).map(([label, place, coords]) => `${label}: ${[place, coords].filter(Boolean).join(' — ')}`),
     t.expeditor_contact ? `Експедитор: ${t.expeditor_contact}` : null,
     t.route_plan ? `Маршрут: ${t.route_plan}` : null,
     t.odometer_start ? `Спідометр на початок: ${t.odometer_start}` : null,
