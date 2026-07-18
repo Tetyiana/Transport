@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../supabase'
+import { longPress } from '../longpress'
 import { nbuRate } from '../nbu'
 import { stampPdf } from '../pdfsign'
 import { TRIP_STATUSES, PAY_FORMS, payFormLabel, DOC_TYPES, docTypeLabel, schemeLabel, PAY_SCHEMES, CURRENCIES } from '../dicts'
@@ -13,6 +14,7 @@ export default function TripCard() {
   const [t, setT] = useState(null)
   const [events, setEvents] = useState([])
   const [expenses, setExpenses] = useState([])
+  const [exEditId, setExEditId] = useState(null)
   const [incomes, setIncomes] = useState([])
   const [docs, setDocs] = useState([])
   const [payroll, setPayroll] = useState([])
@@ -89,10 +91,24 @@ export default function TripCard() {
     if (!exf.category_id || !exf.amount) return
     const r = exf.currency === 'UAH' ? 1 : await nbuRate(exf.currency, exf.expense_date)
     const rec = { ...exf, trip_id: id, vehicle_id: t.vehicle_id, rate: r, amount_uah: r ? Number(exf.amount) * r : null }
-    const { error } = await supabase.from('expenses').insert(rec)
+    const { error } = exEditId
+      ? await supabase.from('expenses').update(rec).eq('id', exEditId)
+      : await supabase.from('expenses').insert(rec)
     if (error) { alert(error.message); return }
     if (r == null) alert('Курс НБУ не підтягнувся — суму в грн можна буде поправити пізніше')
+    setExEditId(null)
     setExf({ category_id: '', amount: '', currency: 'UAH', payment_form: 'bank', expense_date: today(), note: '' }); load()
+  }
+  const editExpense = (e) => {
+    setExf({ category_id: e.category_id || '', amount: e.amount, currency: e.currency || 'UAH',
+      payment_form: e.payment_form || 'bank', expense_date: e.expense_date, note: e.note || '' })
+    setExEditId(e.id)
+  }
+  const removeExpense = async (e) => {
+    if (!confirm(`Видалити витрату ${e.amount} ${e.currency}${e.note ? ` (${e.note})` : ''}?`)) return
+    const { error } = await supabase.from('expenses').delete().eq('id', e.id)
+    if (error) { alert(error.message); return }
+    load()
   }
   const addIncome = async () => {
     if (!inf.amount) return
@@ -304,13 +320,14 @@ export default function TripCard() {
         <h2 style={{ marginTop: 0 }}>Витрати рейсу</h2>
         {expenses.length > 0 && (
           <table>
-            <thead><tr><th>Дата</th><th>Категорія</th><th>Сума</th><th>Грн (курс)</th><th>Форма</th><th>Примітка</th></tr></thead>
+            <thead><tr><th>Дата</th><th>Категорія</th><th>Сума</th><th>Грн (курс)</th><th>Форма</th><th>Примітка</th><th></th></tr></thead>
             <tbody>{expenses.map(e => (
-              <tr key={e.id}>
+              <tr key={e.id} {...longPress(() => editExpense(e))}>
                 <td>{e.expense_date}</td><td>{e.category?.name}</td>
                 <td>{fmt(e.amount)} {e.currency}</td>
                 <td>{e.currency === 'UAH' ? '—' : `${fmt(e.amount_uah)} (${e.rate ?? '?'})`}</td>
                 <td>{payFormLabel(e.payment_form)}</td><td>{e.note}</td>
+                <td><button className="small secondary" onClick={() => editExpense(e)}>Ред.</button> <button className="small danger-btn" onClick={() => removeExpense(e)}>✕</button></td>
               </tr>
             ))}</tbody>
           </table>
@@ -333,7 +350,7 @@ export default function TripCard() {
             </select></div>
           <div><label>Примітка</label><input value={exf.note} onChange={e => setExf({ ...exf, note: e.target.value })} /></div>
         </div>
-        <div style={{ marginTop: 10 }}><button className="small" onClick={addExpense}>Додати витрату</button></div>
+        <div style={{ marginTop: 10 }} className="row"><button className="small" onClick={addExpense}>{exEditId ? 'Зберегти зміни' : 'Додати витрату'}</button>{exEditId && <button className="small secondary" onClick={() => { setExEditId(null); setExf({ category_id: '', amount: '', currency: 'UAH', payment_form: 'bank', expense_date: today(), note: '' }) }}>Скасувати</button>}</div>
         <p className="muted">Валютні витрати конвертуються в грн за курсом НБУ на дату витрати автоматично. Пальне рефа — окрема категорія «Пальне (реф)».</p>
       </div>
 
