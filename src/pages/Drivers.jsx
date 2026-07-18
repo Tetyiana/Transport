@@ -12,6 +12,13 @@ export default function Drivers() {
   const load = () => supabase.from('drivers').select('*').order('full_name').then(({ data }) => setList(data || []))
   useEffect(() => { load() }, [])
 
+  const genCode = async (d) => {
+    const code = Array.from({ length: 6 }, () => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 31)]).join('')
+    const { error } = await supabase.from('drivers').update({ tg_link_code: code, telegram_chat_id: null }).eq('id', d.id)
+    if (error) { alert(error.message); return }
+    load()
+  }
+
   const save = async () => {
     if (!f.full_name) return
     const rec = { ...f }
@@ -55,17 +62,24 @@ export default function Drivers() {
       )}
       <div className="panel">
         <table>
-          <thead><tr><th>ПІБ</th><th>Телефон</th><th>Схема ЗП</th><th>Ставка</th><th>Податки</th></tr></thead>
+          <thead><tr><th>ПІБ</th><th>Телефон</th><th>Схема ЗП</th><th>Ставка</th><th>Податки</th><th>Telegram</th></tr></thead>
           <tbody>{list.map(d => (
             <tr key={d.id}>
               <td>{d.full_name}</td><td>{d.phone}</td>
               <td><span className="badge">{schemeLabel(d.pay_scheme)}</span></td>
               <td>{d.pay_percent ? `${d.pay_percent}%` : d.rate_per_trip ? d.rate_per_trip : (d.rate_km_ua || d.rate_km_abroad) ? `${d.rate_km_ua ?? '—'} / ${d.rate_km_abroad ?? '—'} за км` : '—'}</td>
               <td>{d.taxes_included ? 'включено' : 'окремо'}</td>
+              <td>
+                {d.telegram_chat_id ? '✔ підключено'
+                  : d.tg_link_code ? <span>код: <b>{d.tg_link_code}</b></span>
+                  : <button className="small secondary" onClick={() => genCode(d)}>Код підключення</button>}
+              </td>
             </tr>
           ))}</tbody>
         </table>
         {list.length === 0 && <p className="muted">Додайте першого водія.</p>}
+        {list.some(d => d.tg_link_code && !d.telegram_chat_id) &&
+          <p className="muted">Водій відкриває бота в Telegram і надсилає: <b>/start КОД</b></p>}
       </div>
     </div>
   )

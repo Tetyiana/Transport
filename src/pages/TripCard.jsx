@@ -29,7 +29,7 @@ export default function TripCard() {
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('trips')
-      .select('*, customer:customer_id(name), carrier:carrier_id(name), vehicle:vehicle_id(name), driver:driver_id(id, full_name, phone, pay_scheme, pay_percent, rate_km_ua, rate_km_abroad, rate_per_trip, taxes_included)')
+      .select('*, customer:customer_id(name), carrier:carrier_id(name), vehicle:vehicle_id(name), driver:driver_id(id, full_name, phone, pay_scheme, pay_percent, rate_km_ua, rate_km_abroad, rate_per_trip, taxes_included, telegram_chat_id)')
       .eq('id', id).single()
     setT(data); setEf(data || {})
     supabase.from('trip_events').select('*').eq('trip_id', id).order('sort_order').then(({ data }) => setEvents(data || []))
@@ -180,6 +180,10 @@ export default function TripCard() {
 
   const sendToDriver = async () => {
     const text = driverMessage()
+    if (t.driver?.telegram_chat_id) {
+      const { data, error } = await supabase.functions.invoke('tg-bot', { body: { action: 'send', trip_id: id, text } })
+      if (!error && data?.ok) { alert('Надіслано водію в Telegram'); return }
+    }
     try { await navigator.clipboard.writeText(text) } catch {}
     window.open(`https://t.me/share/url?url=%20&text=${encodeURIComponent(text)}`, '_blank')
   }
