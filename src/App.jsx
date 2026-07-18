@@ -9,6 +9,7 @@ import Counterparties from './pages/Counterparties'
 import Vehicles from './pages/Vehicles'
 import Drivers from './pages/Drivers'
 import Money from './pages/Money'
+import Documents from './pages/Documents'
 
 export default function App() {
   const [session, setSession] = useState(undefined)
@@ -29,6 +30,7 @@ export default function App() {
         <NavLink to="/" end>Дашборд</NavLink>
         <NavLink to="/trips">Рейси</NavLink>
         <NavLink to="/money">Гроші</NavLink>
+        <NavLink to="/documents">Документи</NavLink>
         <NavLink to="/counterparties">Контрагенти</NavLink>
         <NavLink to="/vehicles">Машини</NavLink>
         <NavLink to="/drivers">Водії</NavLink>
@@ -40,6 +42,7 @@ export default function App() {
           <Route path="/trips" element={<Trips />} />
           <Route path="/trips/:id" element={<TripCard />} />
           <Route path="/money" element={<Money />} />
+          <Route path="/documents" element={<Documents />} />
           <Route path="/counterparties" element={<Counterparties />} />
           <Route path="/vehicles" element={<Vehicles />} />
           <Route path="/drivers" element={<Drivers />} />

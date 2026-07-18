@@ -1,0 +1,12 @@
+alter table documents add column vehicle_id uuid references vehicles(id);
+alter table documents add column driver_id uuid references drivers(id);
+alter table documents drop constraint if exists documents_doc_type_check;
+alter table trips add column nbu_rate numeric;
+alter table trips add column customs_info text;
+alter table trips add column expeditor_contact text;
+alter table trips add column route_plan text;
+alter table expenses add column rate numeric;
+alter table expenses add column amount_uah numeric;
+alter table incomes add column rate numeric;
+alter table incomes add column amount_uah numeric;
+insert into expense_categories (name, scope) values ('Пальне (реф)','carrier');

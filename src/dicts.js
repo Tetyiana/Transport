@@ -28,7 +28,7 @@ export const PAY_SCHEMES = [
   ['percent_freight', '% від фрахту'],
   ['per_km', 'Ставка за км'],
   ['per_trip', 'Ставка за рейс'],
-  ['percent_profit', '% від прибутку'],
+  ['percent_profit', '% від чистого прибутку'],
 ]
 export const schemeLabel = (s) => Object.fromEntries(PAY_SCHEMES)[s] || s
 
@@ -46,6 +46,9 @@ export const CONTRACT_FORMS = [
   ['mixed', 'Змішана форма'],
 ]
 
+export const CURRENCIES = ['UAH', 'EUR', 'USD', 'PLN']
+
+// Документи рейсу
 export const DOC_TYPES = [
   ['contract', 'Договір'],
   ['application', 'Заявка'],
@@ -57,9 +60,21 @@ export const DOC_TYPES = [
   ['insurance', 'Страховка'],
   ['other', 'Інше'],
 ]
-export const docTypeLabel = (t) => Object.fromEntries(DOC_TYPES)[t] || t
+export const docTypeLabel = (t) => ({ ...Object.fromEntries(DOC_TYPES), ...Object.fromEntries(STAT_DOC_TYPES) })[t] || t
 
-// Типовий чек-лист рейсу перевізника (за бізнес-процесом)
+// Статутні документи — завжди під рукою для відправки замовнику
+export const STAT_DOC_TYPES = [
+  ['fop_extract', 'Виписка ФОП'],
+  ['license', 'Ліцензія'],
+  ['single_tax', 'Витяг єдиного податку'],
+  ['requisites', 'Реквізити'],
+  ['tech_passport_truck', 'Техпаспорт тягача'],
+  ['tech_passport_trailer', 'Техпаспорт причепа'],
+  ['driver_license', 'Права водія'],
+  ['driver_passport', 'Закордонний паспорт водія'],
+  ['stat_other', 'Інше (статутне)'],
+]
+
 export const CARRIER_CHECKLIST = [
   'Пакет документів (PDF) відправлено замовнику',
   'Заявку підписано (печатка + підпис)',

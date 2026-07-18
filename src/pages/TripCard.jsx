@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../supabase'
-import { TRIP_STATUSES, statusLabel, PAY_FORMS, payFormLabel, DOC_TYPES, docTypeLabel, schemeLabel, PAY_SCHEMES } from '../dicts'
+import { nbuRate } from '../nbu'
+import { TRIP_STATUSES, PAY_FORMS, payFormLabel, DOC_TYPES, docTypeLabel, schemeLabel, PAY_SCHEMES, CURRENCIES } from '../dicts'
 
-const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('uk-UA'))
+const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('uk-UA', { maximumFractionDigits: 2 }))
 const today = () => new Date().toISOString().slice(0, 10)
 
 export default function TripCard() {
@@ -15,16 +16,17 @@ export default function TripCard() {
   const [docs, setDocs] = useState([])
   const [payroll, setPayroll] = useState([])
   const [cats, setCats] = useState([])
+  const [rate, setRate] = useState(null) // курс НБУ для фрахту (дата вивантаження)
   const [edit, setEdit] = useState(false)
   const [ef, setEf] = useState({})
-  const [exf, setExf] = useState({ category_id: '', amount: '', payment_form: 'bank', expense_date: today(), note: '' })
-  const [inf, setInf] = useState({ amount: '', payment_form: 'bank', income_date: today(), note: '' })
+  const [exf, setExf] = useState({ category_id: '', amount: '', currency: 'UAH', payment_form: 'bank', expense_date: today(), note: '' })
+  const [inf, setInf] = useState({ amount: '', currency: 'UAH', payment_form: 'bank', income_date: today(), note: '' })
   const [df, setDf] = useState({ doc_type: 'application', title: '', file: null })
   const [pf, setPf] = useState({ scheme: 'percent_freight', base_amount: '', amount: '' })
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('trips')
-      .select('*, customer:customer_id(name), carrier:carrier_id(name), vehicle:vehicle_id(name), driver:driver_id(id, full_name, pay_scheme, pay_percent, rate_km_ua, rate_km_abroad, rate_per_trip, taxes_included)')
+      .select('*, customer:customer_id(name), carrier:carrier_id(name), vehicle:vehicle_id(name), driver:driver_id(id, full_name, phone, pay_scheme, pay_percent, rate_km_ua, rate_km_abroad, rate_per_trip, taxes_included)')
       .eq('id', id).single()
     setT(data); setEf(data || {})
     supabase.from('trip_events').select('*').eq('trip_id', id).order('sort_order').then(({ data }) => setEvents(data || []))
@@ -39,11 +41,22 @@ export default function TripCard() {
     supabase.from('expense_categories').select('*').order('name').then(({ data }) => setCats(data || []))
   }, [load])
 
+  // курс для фрахту: збережений, або НБУ на дату вивантаження
+  useEffect(() => {
+    if (!t) return
+    if (t.currency === 'UAH') { setRate(1); return }
+    if (t.nbu_rate) { setRate(t.nbu_rate); return }
+    if (t.unloading_date) {
+      nbuRate(t.currency, t.unloading_date).then(r => {
+        setRate(r)
+        if (r) supabase.from('trips').update({ nbu_rate: r }).eq('id', id)
+      })
+    }
+  }, [t, id])
+
   if (!t) return null
 
-  const setStatus = async (status) => {
-    await supabase.from('trips').update({ status }).eq('id', id); load()
-  }
+  const setStatus = async (status) => { await supabase.from('trips').update({ status }).eq('id', id); load() }
   const toggleEvent = async (ev) => {
     await supabase.from('trip_events').update({ done: !ev.done, done_at: !ev.done ? new Date().toISOString() : null }).eq('id', ev.id); load()
   }
@@ -51,27 +64,34 @@ export default function TripCard() {
     const upd = { ...ef }
     delete upd.customer; delete upd.carrier; delete upd.vehicle; delete upd.driver
     for (const k in upd) if (upd[k] === '') upd[k] = null
+    // якщо змінилась дата вивантаження — оновлюємо курс НБУ
+    if (upd.unloading_date && t.currency !== 'UAH' && upd.unloading_date !== t.unloading_date) {
+      upd.nbu_rate = await nbuRate(t.currency, upd.unloading_date)
+    }
     const { error } = await supabase.from('trips').update(upd).eq('id', id)
     if (error) { alert(error.message); return }
     setEdit(false); load()
   }
   const addExpense = async () => {
     if (!exf.category_id || !exf.amount) return
-    const { error } = await supabase.from('expenses').insert({ ...exf, trip_id: id, vehicle_id: t.vehicle_id, currency: t.currency })
+    const r = exf.currency === 'UAH' ? 1 : await nbuRate(exf.currency, exf.expense_date)
+    const rec = { ...exf, trip_id: id, vehicle_id: t.vehicle_id, rate: r, amount_uah: r ? Number(exf.amount) * r : null }
+    const { error } = await supabase.from('expenses').insert(rec)
     if (error) { alert(error.message); return }
-    setExf({ category_id: '', amount: '', payment_form: 'bank', expense_date: today(), note: '' }); load()
+    if (r == null) alert('Курс НБУ не підтягнувся — суму в грн можна буде поправити пізніше')
+    setExf({ category_id: '', amount: '', currency: 'UAH', payment_form: 'bank', expense_date: today(), note: '' }); load()
   }
   const addIncome = async () => {
     if (!inf.amount) return
-    const { error } = await supabase.from('incomes').insert({ ...inf, trip_id: id, counterparty_id: t.customer_id, currency: t.currency })
+    const r = inf.currency === 'UAH' ? 1 : await nbuRate(inf.currency, inf.income_date)
+    const rec = { ...inf, trip_id: id, counterparty_id: t.customer_id, rate: r, amount_uah: r ? Number(inf.amount) * r : null }
+    const { error } = await supabase.from('incomes').insert(rec)
     if (error) { alert(error.message); return }
-    setInf({ amount: '', payment_form: 'bank', income_date: today(), note: '' })
+    setInf({ amount: '', currency: 'UAH', payment_form: 'bank', income_date: today(), note: '' })
     if (!t.payment_received_date) await supabase.from('trips').update({ payment_received_date: inf.income_date }).eq('id', id)
     load()
   }
-  const markPrro = async (i) => {
-    await supabase.from('incomes').update({ prro_done: true, in_tax_base: true }).eq('id', i.id); load()
-  }
+  const markPrro = async (i) => { await supabase.from('incomes').update({ prro_done: true, in_tax_base: true }).eq('id', i.id); load() }
   const uploadDoc = async () => {
     if (!df.file) return
     const path = `${id}/${Date.now()}_${df.file.name}`
@@ -85,17 +105,29 @@ export default function TripCard() {
     const { data } = await supabase.storage.from('docs').createSignedUrl(d.file_url, 3600)
     if (data?.signedUrl) window.open(data.signedUrl, '_blank')
   }
+
+  // Гроші в грн
+  const spentUah = expenses.reduce((s, e) => s + Number(e.amount_uah ?? (e.currency === 'UAH' || !e.currency ? e.amount : 0)), 0)
+  const revenueOrig = t.mode === 'expedition' ? Number(t.commission_amount || 0) : Number(t.freight_amount || 0)
+  const revenueUah = t.currency === 'UAH' ? revenueOrig : (rate ? revenueOrig * rate : null)
+  const profitUah = revenueUah != null ? revenueUah - spentUah : null
+  const km = (t.odometer_start && t.odometer_end) ? t.odometer_end - t.odometer_start : (Number(t.km_ua || 0) + Number(t.km_abroad || 0)) || null
+  const costPerKm = km && spentUah ? (spentUah / km).toFixed(2) : null
+
+  // Тахо: орієнтовно 65 км/год, до 9 год кермування на добу
+  const driveH = km ? km / 65 : null
+  const driveDays = driveH ? Math.ceil(driveH / 9) : null
+
   const suggestPay = () => {
     const d = t.driver
     if (!d) return
     let base = '', amount = ''
-    if (pf.scheme === 'percent_freight') { base = t.freight_amount || ''; amount = base && d.pay_percent ? (base * d.pay_percent / 100).toFixed(2) : '' }
-    if (pf.scheme === 'per_km') { base = (Number(t.km_ua || 0) + Number(t.km_abroad || 0)) || ''; amount = ((t.km_ua || 0) * (d.rate_km_ua || 0) + (t.km_abroad || 0) * (d.rate_km_abroad || 0)).toFixed(2) }
+    if (pf.scheme === 'percent_freight') { base = revenueUah ?? ''; amount = base && d.pay_percent ? (base * d.pay_percent / 100).toFixed(2) : '' }
+    if (pf.scheme === 'per_km') { base = km || ''; amount = ((t.km_ua || 0) * (d.rate_km_ua || 0) + (t.km_abroad || 0) * (d.rate_km_abroad || 0)).toFixed(2) }
     if (pf.scheme === 'per_trip') { amount = d.rate_per_trip || '' }
     if (pf.scheme === 'percent_profit') {
-      const spent = expenses.reduce((s, e) => s + Number(e.amount), 0)
-      base = ((t.freight_amount || 0) - spent).toFixed(2)
-      amount = d.pay_percent ? (base * d.pay_percent / 100).toFixed(2) : ''
+      base = profitUah != null ? profitUah.toFixed(2) : ''
+      amount = base && d.pay_percent ? (base * d.pay_percent / 100).toFixed(2) : ''
     }
     setPf({ ...pf, base_amount: base, amount })
   }
@@ -109,18 +141,22 @@ export default function TripCard() {
     if (error) { alert(error.message); return }
     setPf({ scheme: 'percent_freight', base_amount: '', amount: '' }); load()
   }
-  const markPaid = async (p) => {
-    await supabase.from('driver_payroll').update({ paid: true, paid_date: today() }).eq('id', p.id); load()
-  }
+  const markPaid = async (p) => { await supabase.from('driver_payroll').update({ paid: true, paid_date: today() }).eq('id', p.id); load() }
 
-  const spent = expenses.reduce((s, e) => s + Number(e.amount), 0)
-  const received = incomes.reduce((s, i) => s + Number(i.amount), 0)
-  const revenue = t.mode === 'expedition' ? Number(t.commission_amount || 0) : Number(t.freight_amount || 0)
-  const profit = t.mode === 'expedition'
-    ? Number(t.commission_amount || 0) - spent
-    : revenue - spent
-  const km = (t.odometer_start && t.odometer_end) ? t.odometer_end - t.odometer_start : (Number(t.km_ua || 0) + Number(t.km_abroad || 0)) || null
-  const costPerKm = km && spent ? (spent / km).toFixed(2) : null
+  const driverMessage = () => [
+    `Рейс ${t.number || ''} ${t.route_from || ''} → ${t.route_to || ''}`.trim(),
+    t.loading_date ? `Завантаження: ${t.loading_date}` : null,
+    t.customs_info ? `Замитнення/розмитнення: ${t.customs_info}` : null,
+    t.expeditor_contact ? `Експедитор: ${t.expeditor_contact}` : null,
+    t.route_plan ? `Маршрут: ${t.route_plan}` : null,
+    driveDays ? `Орієнтовно ${Math.round(driveH)} год кермування, ~${driveDays} діб по тахо` : null,
+  ].filter(Boolean).join('\n')
+
+  const sendToDriver = async () => {
+    const text = driverMessage()
+    try { await navigator.clipboard.writeText(text) } catch {}
+    window.open(`https://t.me/share/url?url=%20&text=${encodeURIComponent(text)}`, '_blank')
+  }
 
   const setE = (k) => (e) => setEf({ ...ef, [k]: e.target.value })
 
@@ -137,11 +173,14 @@ export default function TripCard() {
       </div>
 
       <div className="cards">
-        <div className="stat"><div className="num">{fmt(revenue)}</div><div className="lbl">Дохід ({t.currency})</div></div>
-        <div className="stat"><div className="num">{fmt(spent)}</div><div className="lbl">Витрати</div></div>
-        <div className="stat"><div className="num" style={{ color: profit >= 0 ? 'var(--ok)' : 'var(--danger)' }}>{fmt(profit)}</div><div className="lbl">Прибуток</div></div>
-        {costPerKm && <div className="stat"><div className="num">{costPerKm}</div><div className="lbl">Собівартість / км</div></div>}
+        <div className="stat"><div className="num">{fmt(revenueOrig)} {t.currency}</div>
+          <div className="lbl">Дохід {t.currency !== 'UAH' && revenueUah != null ? `≈ ${fmt(revenueUah)} грн (курс ${rate})` : ''}</div></div>
+        <div className="stat"><div className="num">{fmt(spentUah)}</div><div className="lbl">Витрати, грн</div></div>
+        <div className="stat"><div className="num" style={{ color: (profitUah ?? 0) >= 0 ? 'var(--ok)' : 'var(--danger)' }}>{fmt(profitUah)}</div>
+          <div className="lbl">Чистий прибуток, грн</div></div>
+        {costPerKm && <div className="stat"><div className="num">{costPerKm}</div><div className="lbl">Собівартість грн/км</div></div>}
       </div>
+      {t.currency !== 'UAH' && !t.unloading_date && <p className="muted">Курс НБУ підтягнеться після вказання дати розвантаження (в «Редагувати»).</p>}
 
       {edit && (
         <div className="panel">
@@ -164,17 +203,25 @@ export default function TripCard() {
             <div><label>Термін отримання ТТН</label><input type="date" value={ef.ttn_due_date || ''} onChange={setE('ttn_due_date')} /></div>
             <div><label>Термін оплати</label><input type="date" value={ef.payment_due_date || ''} onChange={setE('payment_due_date')} /></div>
             <div><label>Оплату отримано</label><input type="date" value={ef.payment_received_date || ''} onChange={setE('payment_received_date')} /></div>
+            <div><label>Замитнення/розмитнення</label><input value={ef.customs_info || ''} onChange={setE('customs_info')} placeholder="місце, брокер" /></div>
+            <div><label>Контакт експедитора</label><input value={ef.expeditor_contact || ''} onChange={setE('expeditor_contact')} /></div>
+            <div style={{ gridColumn: '1 / -1' }}><label>Маршрут для водія</label>
+              <textarea rows={2} value={ef.route_plan || ''} onChange={setE('route_plan')} placeholder="Київ — Ягодин — Варшава — ..." /></div>
           </div>
           <div style={{ marginTop: 12 }}><button onClick={saveEdit}>Зберегти</button></div>
         </div>
       )}
 
       <div className="panel">
-        <div className="row muted" style={{ gap: 18 }}>
-          <span>Замовник: <b>{t.customer?.name || '—'}</b></span>
-          {t.mode === 'expedition' && <span>Перевізник: <b>{t.carrier?.name || '—'}</b></span>}
-          {t.mode === 'carrier' && <><span>Машина: <b>{t.vehicle?.name || '—'}</b></span><span>Водій: <b>{t.driver?.full_name || '—'}</b></span></>}
-          {t.payment_due_date && <span>Оплата до: <b>{t.payment_due_date}</b></span>}
+        <div className="spread">
+          <div className="row muted" style={{ gap: 18 }}>
+            <span>Замовник: <b>{t.customer?.name || '—'}</b></span>
+            {t.mode === 'expedition' && <span>Перевізник: <b>{t.carrier?.name || '—'}</b></span>}
+            {t.mode === 'carrier' && <><span>Машина: <b>{t.vehicle?.name || '—'}</b></span><span>Водій: <b>{t.driver?.full_name || '—'}</b></span></>}
+            {km && <span>Пробіг: <b>{km} км</b></span>}
+            {driveDays && <span>По тахо: <b>≈ {Math.round(driveH)} год / {driveDays} діб</b></span>}
+          </div>
+          {t.mode === 'carrier' && <button className="small" onClick={sendToDriver}>Надіслати водію (Telegram)</button>}
         </div>
       </div>
 
@@ -192,9 +239,14 @@ export default function TripCard() {
         <h2 style={{ marginTop: 0 }}>Витрати рейсу</h2>
         {expenses.length > 0 && (
           <table>
-            <thead><tr><th>Дата</th><th>Категорія</th><th>Сума</th><th>Форма</th><th>Примітка</th></tr></thead>
+            <thead><tr><th>Дата</th><th>Категорія</th><th>Сума</th><th>Грн (курс)</th><th>Форма</th><th>Примітка</th></tr></thead>
             <tbody>{expenses.map(e => (
-              <tr key={e.id}><td>{e.expense_date}</td><td>{e.category?.name}</td><td>{fmt(e.amount)}</td><td>{payFormLabel(e.payment_form)}</td><td>{e.note}</td></tr>
+              <tr key={e.id}>
+                <td>{e.expense_date}</td><td>{e.category?.name}</td>
+                <td>{fmt(e.amount)} {e.currency}</td>
+                <td>{e.currency === 'UAH' ? '—' : `${fmt(e.amount_uah)} (${e.rate ?? '?'})`}</td>
+                <td>{payFormLabel(e.payment_form)}</td><td>{e.note}</td>
+              </tr>
             ))}</tbody>
           </table>
         )}
@@ -205,31 +257,43 @@ export default function TripCard() {
               {cats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select></div>
           <div><label>Сума</label><input type="number" value={exf.amount} onChange={e => setExf({ ...exf, amount: e.target.value })} /></div>
+          <div><label>Валюта</label>
+            <select value={exf.currency} onChange={e => setExf({ ...exf, currency: e.target.value })}>
+              {CURRENCIES.map(c => <option key={c}>{c}</option>)}
+            </select></div>
           <div><label>Дата</label><input type="date" value={exf.expense_date} onChange={e => setExf({ ...exf, expense_date: e.target.value })} /></div>
           <div><label>Форма оплати</label>
             <select value={exf.payment_form} onChange={e => setExf({ ...exf, payment_form: e.target.value })}>
               {PAY_FORMS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select></div>
+          <div><label>Примітка</label><input value={exf.note} onChange={e => setExf({ ...exf, note: e.target.value })} /></div>
         </div>
         <div style={{ marginTop: 10 }}><button className="small" onClick={addExpense}>Додати витрату</button></div>
+        <p className="muted">Валютні витрати конвертуються в грн за курсом НБУ на дату витрати автоматично. Пальне рефа — окрема категорія «Пальне (реф)».</p>
       </div>
 
       <div className="panel">
         <h2 style={{ marginTop: 0 }}>Надходження</h2>
         {incomes.length > 0 && (
           <table>
-            <thead><tr><th>Дата</th><th>Сума</th><th>Форма</th><th>ПРРО</th><th></th></tr></thead>
+            <thead><tr><th>Дата</th><th>Сума</th><th>Грн</th><th>Форма</th><th>ПРРО</th><th></th></tr></thead>
             <tbody>{incomes.map(i => (
               <tr key={i.id}>
-                <td>{i.income_date}</td><td>{fmt(i.amount)} {i.currency}</td><td>{payFormLabel(i.payment_form)}</td>
+                <td>{i.income_date}</td><td>{fmt(i.amount)} {i.currency}</td>
+                <td>{i.currency === 'UAH' ? '—' : fmt(i.amount_uah)}</td>
+                <td>{payFormLabel(i.payment_form)}</td>
                 <td>{i.prro_required ? (i.prro_done ? <span className="badge ok">проведено</span> : <span className="badge warn">провести!</span>) : '—'}</td>
                 <td>{i.prro_required && !i.prro_done && <button className="small" onClick={() => markPrro(i)}>Проведено через ПРРО</button>}</td>
               </tr>
             ))}</tbody>
           </table>
         )}
-        <div className="grid g3" style={{ marginTop: 10 }}>
+        <div className="grid g4" style={{ marginTop: 10 }}>
           <div><label>Сума</label><input type="number" value={inf.amount} onChange={e => setInf({ ...inf, amount: e.target.value })} /></div>
+          <div><label>Валюта</label>
+            <select value={inf.currency} onChange={e => setInf({ ...inf, currency: e.target.value })}>
+              {CURRENCIES.map(c => <option key={c}>{c}</option>)}
+            </select></div>
           <div><label>Дата</label><input type="date" value={inf.income_date} onChange={e => setInf({ ...inf, income_date: e.target.value })} /></div>
           <div><label>Форма оплати</label>
             <select value={inf.payment_form} onChange={e => setInf({ ...inf, payment_form: e.target.value })}>
@@ -237,7 +301,6 @@ export default function TripCard() {
             </select></div>
         </div>
         <div style={{ marginTop: 10 }}><button className="small" onClick={addIncome}>Додати надходження</button></div>
-        {received > 0 && <p className="muted">Отримано: {fmt(received)} {t.currency}</p>}
       </div>
 
       <div className="panel">
@@ -260,6 +323,7 @@ export default function TripCard() {
           <div><label>Файл (PDF)</label><input type="file" onChange={e => setDf({ ...df, file: e.target.files[0] })} /></div>
         </div>
         <div style={{ marginTop: 10 }}><button className="small" onClick={uploadDoc}>Завантажити</button></div>
+        <p className="muted">Статутні документи (виписка, ліцензія, техпаспорти, права) — на сторінці «Документи».</p>
       </div>
 
       {t.mode === 'carrier' && (
@@ -267,7 +331,7 @@ export default function TripCard() {
           <h2 style={{ marginTop: 0 }}>ЗП водія</h2>
           {payroll.length > 0 && (
             <table>
-              <thead><tr><th>Схема</th><th>База</th><th>Нараховано</th><th>Податки</th><th>Статус</th><th></th></tr></thead>
+              <thead><tr><th>Схема</th><th>База, грн</th><th>Нараховано</th><th>Податки</th><th>Статус</th><th></th></tr></thead>
               <tbody>{payroll.map(p => (
                 <tr key={p.id}>
                   <td>{schemeLabel(p.scheme)}</td><td>{fmt(p.base_amount)}</td><td>{fmt(p.amount)}</td>
@@ -278,20 +342,21 @@ export default function TripCard() {
               ))}</tbody>
             </table>
           )}
-          {t.driver ? (
+          {t.driver ? (<>
             <div className="grid g4" style={{ marginTop: 10 }}>
               <div><label>Схема</label>
                 <select value={pf.scheme} onChange={e => setPf({ ...pf, scheme: e.target.value })}>
                   {PAY_SCHEMES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </select></div>
-              <div><label>База</label><input type="number" value={pf.base_amount} onChange={e => setPf({ ...pf, base_amount: e.target.value })} /></div>
+              <div><label>База, грн</label><input type="number" value={pf.base_amount} onChange={e => setPf({ ...pf, base_amount: e.target.value })} /></div>
               <div><label>Сума</label><input type="number" value={pf.amount} onChange={e => setPf({ ...pf, amount: e.target.value })} /></div>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
                 <button className="small secondary" onClick={suggestPay}>Розрахувати</button>
                 <button className="small" onClick={addPayroll}>Нарахувати</button>
               </div>
             </div>
-          ) : <p className="muted">Призначте водія рейсу, щоб нарахувати ЗП.</p>}
+            <p className="muted">% від чистого прибутку = (фрахт у грн за курсом НБУ на дату розвантаження − всі витрати рейсу в грн) × відсоток водія. Витрати, що мають зменшувати базу (податки тощо), додавайте у витрати рейсу.</p>
+          </>) : <p className="muted">Призначте водія рейсу, щоб нарахувати ЗП.</p>}
         </div>
       )}
 
