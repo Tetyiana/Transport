@@ -63,9 +63,19 @@ export default function TripCard() {
   const toggleEvent = async (ev) => {
     await supabase.from('trip_events').update({ done: !ev.done, done_at: !ev.done ? new Date().toISOString() : null }).eq('id', ev.id); load()
   }
+  // нормалізація координат до 5 знаків після коми (вимога RMPD/SENT)
+  const fmtCoords = (v) => {
+    if (!v) return v
+    const m = String(v).replace(/,(\d)/g, '.$1').match(/(-?\d+\.?\d*)[\s,;]+(-?\d+\.?\d*)/)
+    if (!m) return v
+    return `${Number(m[1]).toFixed(5)}, ${Number(m[2]).toFixed(5)}`
+  }
+
   const saveEdit = async () => {
     const upd = { ...ef }
     delete upd.customer; delete upd.carrier; delete upd.vehicle; delete upd.driver
+    for (const k of ['route_from_coords', 'route_to_coords', 'customs_out_coords', 'border_coords', 'customs_in_coords'])
+      upd[k] = fmtCoords(upd[k])
     for (const k in upd) if (upd[k] === '') upd[k] = null
     // якщо змінилась дата вивантаження — оновлюємо курс НБУ
     if (upd.unloading_date && t.currency !== 'UAH' && upd.unloading_date !== t.unloading_date) {
