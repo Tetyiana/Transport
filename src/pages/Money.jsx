@@ -3,6 +3,18 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { payFormLabel, PAY_FORMS } from '../dicts'
 
+const csvExport = (rows, name) => {
+  if (!rows.length) return
+  const head = Object.keys(rows[0])
+  const esc = (v) => `"${String(v ?? '').replaceAll('"', '""')}"`
+  const body = [head.join(';'), ...rows.map(r => head.map(k => esc(r[k])).join(';'))].join('\r\n')
+  const blob = new Blob(['\ufeff' + body], { type: 'text/csv;charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = name
+  a.click()
+}
+
 const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('uk-UA'))
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -59,6 +71,10 @@ export default function Money() {
       <div className="row" style={{ marginBottom: 12 }}>
         <button className={tab === 'incomes' ? '' : 'secondary'} onClick={() => setTab('incomes')}>Надходження</button>
         <button className={tab === 'expenses' ? '' : 'secondary'} onClick={() => setTab('expenses')}>Витрати</button>
+        <button className="secondary" onClick={() => tab === 'incomes'
+          ? csvExport(incomes.map(i => ({ дата: i.income_date, сума: i.amount, валюта: i.currency, сума_грн: i.amount_uah ?? (i.currency === 'UAH' ? i.amount : ''), форма: payFormLabel(i.payment_form), контрагент: i.counterparty?.name || '', рейс: i.trip?.number || '', ПРРО: i.prro_required ? (i.prro_done ? 'проведено' : 'не проведено') : '', в_базі_оподаткування: i.in_tax_base ? 'так' : 'ні', примітка: i.note || '' })), 'доходи.csv')
+          : csvExport(expenses.map(e => ({ дата: e.expense_date, категорія: e.category?.name || '', сума: e.amount, валюта: e.currency, сума_грн: e.amount_uah ?? (e.currency === 'UAH' ? e.amount : ''), форма: payFormLabel(e.payment_form), рейс: e.trip?.number || '', машина: e.vehicle?.name || '', примітка: e.note || '' })), 'витрати.csv')
+        }>Експорт CSV (бухгалтерія)</button>
       </div>
 
       {tab === 'incomes' && (

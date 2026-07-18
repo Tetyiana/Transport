@@ -10,6 +10,7 @@ import Vehicles from './pages/Vehicles'
 import Drivers from './pages/Drivers'
 import Money from './pages/Money'
 import Documents from './pages/Documents'
+import Analytics from './pages/Analytics'
 
 export default function App() {
   const [session, setSession] = useState(undefined)
@@ -30,6 +31,7 @@ export default function App() {
         <NavLink to="/" end>Дашборд</NavLink>
         <NavLink to="/trips">Рейси</NavLink>
         <NavLink to="/money">Гроші</NavLink>
+        <NavLink to="/analytics">Аналітика</NavLink>
         <NavLink to="/documents">Документи</NavLink>
         <NavLink to="/counterparties">Контрагенти</NavLink>
         <NavLink to="/vehicles">Машини</NavLink>
@@ -43,6 +45,7 @@ export default function App() {
           <Route path="/trips/:id" element={<TripCard />} />
           <Route path="/money" element={<Money />} />
           <Route path="/documents" element={<Documents />} />
+          <Route path="/analytics" element={<Analytics />} />
           <Route path="/counterparties" element={<Counterparties />} />
           <Route path="/vehicles" element={<Vehicles />} />
           <Route path="/drivers" element={<Drivers />} />
