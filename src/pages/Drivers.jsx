@@ -8,9 +8,17 @@ export default function Drivers() {
   const [list, setList] = useState([])
   const [f, setF] = useState(empty)
   const [show, setShow] = useState(false)
+  const [editId, setEditId] = useState(null)
 
   const load = () => supabase.from('drivers').select('*').order('full_name').then(({ data }) => setList(data || []))
   useEffect(() => { load() }, [])
+
+  const edit = (d) => {
+    const rec = { ...empty }
+    for (const k of Object.keys(empty)) rec[k] = d[k] ?? ''
+    rec.taxes_included = !!d.taxes_included
+    setF(rec); setEditId(d.id); setShow(true)
+  }
 
   const genCode = async (d) => {
     const code = Array.from({ length: 6 }, () => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 31)]).join('')
@@ -23,16 +31,18 @@ export default function Drivers() {
     if (!f.full_name) return
     const rec = { ...f }
     for (const k of ['pay_percent','rate_km_ua','rate_km_abroad','rate_per_trip']) if (rec[k] === '') rec[k] = null
-    const { error } = await supabase.from('drivers').insert(rec)
+    const { error } = editId
+      ? await supabase.from('drivers').update(rec).eq('id', editId)
+      : await supabase.from('drivers').insert(rec)
     if (error) { alert(error.message); return }
-    setF(empty); setShow(false); load()
+    setF(empty); setEditId(null); setShow(false); load()
   }
 
   return (
     <div>
       <div className="spread">
         <h1>Водії</h1>
-        <button onClick={() => setShow(!show)}>{show ? 'Сховати' : '+ Додати'}</button>
+        <button onClick={() => { if (show) { setShow(false); setEditId(null); setF(empty) } else setShow(true) }}>{show ? 'Сховати' : '+ Додати'}</button>
       </div>
       {show && (
         <div className="panel">
@@ -57,18 +67,19 @@ export default function Drivers() {
                 <option value="0">Окремо</option>
               </select></div>
           </div>
-          <div style={{ marginTop: 12 }}><button onClick={save}>Зберегти</button></div>
+          <div style={{ marginTop: 12 }}><button onClick={save}>{editId ? 'Зберегти зміни' : 'Зберегти'}</button></div>
         </div>
       )}
       <div className="panel">
         <table>
-          <thead><tr><th>ПІБ</th><th>Телефон</th><th>Схема ЗП</th><th>Ставка</th><th>Податки</th><th>Telegram</th></tr></thead>
+          <thead><tr><th>ПІБ</th><th>Телефон</th><th>Схема ЗП</th><th>Ставка</th><th>Податки</th><th></th><th>Telegram</th></tr></thead>
           <tbody>{list.map(d => (
             <tr key={d.id}>
               <td>{d.full_name}</td><td>{d.phone}</td>
               <td><span className="badge">{schemeLabel(d.pay_scheme)}</span></td>
               <td>{d.pay_percent ? `${d.pay_percent}%` : d.rate_per_trip ? d.rate_per_trip : (d.rate_km_ua || d.rate_km_abroad) ? `${d.rate_km_ua ?? '—'} / ${d.rate_km_abroad ?? '—'} за км` : '—'}</td>
               <td>{d.taxes_included ? 'включено' : 'окремо'}</td>
+              <td><button className="small secondary" onClick={() => edit(d)}>Редагувати</button></td>
               <td>
                 {d.telegram_chat_id ? '✔ підключено'
                   : d.tg_link_code ? <span>код: <b>{d.tg_link_code}</b></span>
