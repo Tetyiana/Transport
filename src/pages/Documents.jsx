@@ -7,6 +7,14 @@ export default function Documents() {
   const [vehicles, setVehicles] = useState([])
   const [drivers, setDrivers] = useState([])
   const [f, setF] = useState({ doc_type: 'fop_extract', title: '', vehicle_id: '', driver_id: '', file: null })
+  const [assets, setAssets] = useState({ stamp: false, sign: false })
+
+  const loadAssets = () => {
+    supabase.storage.from('docs').list('company/assets').then(({ data }) => {
+      const names = (data || []).map(x => x.name)
+      setAssets({ stamp: names.includes('stamp'), sign: names.includes('sign') })
+    })
+  }
 
   const load = () => {
     supabase.from('documents')
@@ -17,9 +25,17 @@ export default function Documents() {
   }
   useEffect(() => {
     load()
+    loadAssets()
     supabase.from('vehicles').select('id,name').then(({ data }) => setVehicles(data || []))
     supabase.from('drivers').select('id,full_name').then(({ data }) => setDrivers(data || []))
   }, [])
+
+  const uploadAsset = async (kind, file) => {
+    if (!file) return
+    const { error } = await supabase.storage.from('docs').upload(`company/assets/${kind}`, file, { upsert: true })
+    if (error) { alert(error.message); return }
+    loadAssets()
+  }
 
   const upload = async () => {
     if (!f.file) return
@@ -69,6 +85,20 @@ export default function Documents() {
         <div className="row" style={{ marginTop: 10 }}>
           <input type="file" style={{ width: 'auto' }} onChange={e => setF({ ...f, file: e.target.files[0] })} />
           <button className="small" onClick={upload}>Завантажити</button>
+        </div>
+      </div>
+      <div className="panel">
+        <h2 style={{ marginTop: 0 }}>Печатка і підпис</h2>
+        <p className="muted">PNG з прозорим фоном. Використовуються для накладання на PDF заявок у картці рейсу.</p>
+        <div className="grid g2">
+          <div>
+            <label>Печатка {assets.stamp && <span className="badge ok">завантажено</span>}</label>
+            <input type="file" accept="image/*" onChange={e => uploadAsset('stamp', e.target.files[0])} />
+          </div>
+          <div>
+            <label>Підпис {assets.sign && <span className="badge ok">завантажено</span>}</label>
+            <input type="file" accept="image/*" onChange={e => uploadAsset('sign', e.target.files[0])} />
+          </div>
         </div>
       </div>
       <div className="panel">

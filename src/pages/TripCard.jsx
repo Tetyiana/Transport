@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { nbuRate } from '../nbu'
+import { stampPdf } from '../pdfsign'
 import { TRIP_STATUSES, PAY_FORMS, payFormLabel, DOC_TYPES, docTypeLabel, schemeLabel, PAY_SCHEMES, CURRENCIES } from '../dicts'
 
 const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('uk-UA', { maximumFractionDigits: 2 }))
@@ -23,6 +24,8 @@ export default function TripCard() {
   const [inf, setInf] = useState({ amount: '', currency: 'UAH', payment_form: 'bank', income_date: today(), note: '' })
   const [df, setDf] = useState({ doc_type: 'application', title: '', file: null })
   const [pf, setPf] = useState({ scheme: 'percent_freight', base_amount: '', amount: '' })
+  const [signPos, setSignPos] = useState('right')
+  const [signing, setSigning] = useState(false)
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('trips')
@@ -104,6 +107,29 @@ export default function TripCard() {
   const openDoc = async (d) => {
     const { data } = await supabase.storage.from('docs').createSignedUrl(d.file_url, 3600)
     if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+  }
+  const signDoc = async (d) => {
+    setSigning(true)
+    try {
+      const dl = async (p) => {
+        const { data } = await supabase.storage.from('docs').download(p)
+        return data ? new Uint8Array(await data.arrayBuffer()) : null
+      }
+      const pdf = await dl(d.file_url)
+      if (!pdf) { alert('Не вдалося завантажити PDF'); return }
+      const stamp = await dl('company/assets/stamp')
+      const sign = await dl('company/assets/sign')
+      if (!stamp && !sign) { alert('Спочатку завантажте печатку і підпис на сторінці «Документи»'); return }
+      const out = await stampPdf(pdf, stamp, sign, signPos)
+      const path = `${id}/signed_${Date.now()}.pdf`
+      const { error: upErr } = await supabase.storage.from('docs').upload(path, new Blob([out], { type: 'application/pdf' }))
+      if (upErr) { alert(upErr.message); return }
+      const { error } = await supabase.from('documents').insert({
+        trip_id: id, doc_type: d.doc_type, title: (d.title || 'Документ') + ' (підписано)', file_url: path, signed: true,
+      })
+      if (error) { alert(error.message); return }
+      load()
+    } catch (e) { alert('Помилка обробки PDF: ' + e.message) } finally { setSigning(false) }
   }
 
   // Гроші в грн
@@ -305,15 +331,24 @@ export default function TripCard() {
 
       <div className="panel">
         <h2 style={{ marginTop: 0 }}>Документи</h2>
-        {docs.length > 0 && (
+        {docs.length > 0 && (<>
           <table><tbody>{docs.map(d => (
             <tr key={d.id}>
               <td>{docTypeLabel(d.doc_type)}</td>
               <td><a onClick={() => openDoc(d)} style={{ cursor: 'pointer' }}>{d.title}</a></td>
-              <td>{d.signed ? <span className="badge ok">підписано</span> : ''}</td>
+              <td>{d.signed ? <span className="badge ok">підписано</span> :
+                <button className="small secondary" disabled={signing} onClick={() => signDoc(d)}>{signing ? '...' : 'Печатка+підпис'}</button>}</td>
             </tr>
           ))}</tbody></table>
-        )}
+          <div className="row" style={{ marginTop: 8 }}>
+            <span className="muted">Розміщення:</span>
+            <select value={signPos} onChange={e => setSignPos(e.target.value)} style={{ width: 'auto' }}>
+              <option value="right">Праворуч знизу</option>
+              <option value="center">По центру знизу</option>
+              <option value="left">Ліворуч знизу</option>
+            </select>
+          </div>
+        </>)}
         <div className="grid g3" style={{ marginTop: 10 }}>
           <div><label>Тип</label>
             <select value={df.doc_type} onChange={e => setDf({ ...df, doc_type: e.target.value })}>
