@@ -7,9 +7,11 @@ const TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN') ?? ''
 const SECRET = Deno.env.get('TG_WEBHOOK_SECRET') ?? ''
 const API = `https://api.telegram.org/bot${TOKEN}`
 
+// нові проекти Supabase: секретний ключ sb_secret_... (секрет SB_SECRET_KEY),
+// старі — SUPABASE_SERVICE_ROLE_KEY, який інжектиться автоматично
 const db = createClient(
   Deno.env.get('SUPABASE_URL')!,
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  Deno.env.get('SB_SECRET_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
 )
 
 const CORS = {
@@ -135,7 +137,8 @@ async function handleMessage(msg: Record<string, any>) {
       await send(chat_id, 'Вітаю! Це бот для водіїв.\nНадішліть код підключення так:\n/start КОД\n(код видає диспетчер у застосунку, розділ «Водії»)')
       return
     }
-    const { data: d } = await db.from('drivers').select('id, full_name').eq('tg_link_code', code).maybeSingle()
+    const { data: d, error: derr } = await db.from('drivers').select('id, full_name').eq('tg_link_code', code).maybeSingle()
+    if (derr) { await send(chat_id, 'Технічна помилка доступу до бази: ' + derr.message); return }
     if (!d) { await send(chat_id, 'Код не знайдено. Перевірте і спробуйте ще раз: /start КОД'); return }
     await db.from('drivers').update({ telegram_chat_id: chat_id }).eq('id', d.id)
     await setSession(chat_id, null)
@@ -266,7 +269,7 @@ async function handleCallback(cb: Record<string, any>) {
 // ---------- виклик із застосунку ----------
 async function handleAppRequest(req: Request) {
   const auth = req.headers.get('Authorization')?.replace('Bearer ', '') ?? ''
-  const anon = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!)
+  const anon = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY') ?? 'sb_publishable_ccRe7Ir7dbyLpYlTa97E2g_o2qJD6QD')
   const { data: { user } } = await anon.auth.getUser(auth)
   if (!user) return json({ error: 'unauthorized' }, 401)
 
