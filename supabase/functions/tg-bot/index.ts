@@ -138,7 +138,11 @@ async function handleMessage(msg: Record<string, any>) {
       return
     }
     const { data: d, error: derr } = await db.from('drivers').select('id, full_name').eq('tg_link_code', code).maybeSingle()
-    if (derr) { await send(chat_id, 'Технічна помилка доступу до бази: ' + derr.message); return }
+    if (derr) {
+      const keySrc = Deno.env.get('SB_SECRET_KEY') ? 'SB_SECRET_KEY (' + Deno.env.get('SB_SECRET_KEY')!.slice(0, 10) + '…)' : Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ? 'вбудований service_role' : 'ЖОДНОГО КЛЮЧА'
+      await send(chat_id, 'Технічна помилка доступу до бази: ' + derr.message + '\nВикористаний ключ: ' + keySrc)
+      return
+    }
     if (!d) { await send(chat_id, 'Код не знайдено. Перевірте і спробуйте ще раз: /start КОД'); return }
     await db.from('drivers').update({ telegram_chat_id: chat_id }).eq('id', d.id)
     await setSession(chat_id, null)
