@@ -83,7 +83,7 @@ export default function Drivers() {
               <td><button className="small secondary" onClick={() => edit(d)}>Редагувати</button></td>
               <td>
                 {d.telegram_chat_id ? '✔ підключено'
-                  : d.tg_link_code ? <span>код: <b>{d.tg_link_code}</b></span>
+                  : d.tg_link_code ? <span>код: <b>{d.tg_link_code}</b> <button className="small secondary" onClick={async () => { await navigator.clipboard.writeText(`/start ${d.tg_link_code}`); alert(`Скопійовано: /start ${d.tg_link_code}`) }}>Копіювати</button></span>
                   : <button className="small secondary" onClick={() => genCode(d)}>Код підключення</button>}
               </td>
             </tr>
