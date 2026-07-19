@@ -128,7 +128,9 @@ async function handleMessage(msg: Record<string, any>) {
 
   // /start [код]
   if (text.startsWith('/start')) {
-    const code = text.split(/\s+/)[1]?.toUpperCase()
+    // кириличні двійники латинських літер → латиниця (водії часто набирають код в укр розкладці)
+    const homo: Record<string, string> = { 'А':'A','В':'B','С':'C','Е':'E','Н':'H','І':'I','К':'K','М':'M','О':'O','Р':'P','Т':'T','Х':'X','У':'Y','З':'3' }
+    const code = text.split(/\s+/)[1]?.toUpperCase()?.replace(/./g, (ch: string) => homo[ch] ?? ch)
     if (!code) {
       await send(chat_id, 'Вітаю! Це бот для водіїв.\nНадішліть код підключення так:\n/start КОД\n(код видає диспетчер у застосунку, розділ «Водії»)')
       return
