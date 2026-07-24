@@ -33,7 +33,7 @@ export default function Trips() {
       .select('id,name,type').single()
     if (error) { alert(error.message); return }
     await loadCps()
-    setF(prev => ({ ...prev, customer_id: data.id }))
+    setF(prev => ({ ...prev, [newCp.target || 'customer_id']: data.id }))
     setNewCp(null)
   }
 
@@ -81,16 +81,16 @@ export default function Trips() {
               </select></div>
             <div><label>Номер рейсу</label><input value={f.number} onChange={set('number')} placeholder="напр. 2026-041" /></div>
             <div><label>Замовник</label>
-              <select value={f.customer_id} onChange={e => e.target.value === '__new__' ? setNewCp({ ...emptyCp }) : set('customer_id')(e)}>
+              <select value={f.customer_id} onChange={e => e.target.value === '__new__' ? setNewCp({ ...emptyCp, target: 'customer_id' }) : set('customer_id')(e)}>
                 <option value="">—</option>
                 {cps.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 <option value="__new__">+ Новий контрагент…</option>
               </select></div>
             {newCp && <>
-              <div><label>Назва нового контрагента</label><input value={newCp.name} onChange={e => setNewCp({ ...newCp, name: e.target.value })} /></div>
+              <div><label>{newCp.target === 'carrier_id' ? 'Назва нового перевізника' : 'Назва нового контрагента'}</label><input value={newCp.name} onChange={e => setNewCp({ ...newCp, name: e.target.value })} /></div>
               <div><label>Тип</label>
                 <select value={newCp.type} onChange={e => setNewCp({ ...newCp, type: e.target.value })}>
-                  <option value="expedition">Експедиція</option><option value="shipper">Вантажовідправник</option><option value="other">Інше</option>
+                  <option value="expedition">Експедиція</option><option value="shipper">Вантажовідправник</option><option value="carrier">Перевізник</option><option value="other">Інше</option>
                 </select></div>
               <div><label>ЄДРПОУ (необов'язково)</label><input value={newCp.edrpou} onChange={e => setNewCp({ ...newCp, edrpou: e.target.value })} /></div>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
@@ -124,9 +124,10 @@ export default function Trips() {
               <div><label>Комісія (наш дохід)</label><input type="number" value={f.commission_amount} onChange={set('commission_amount')} /></div>
               <div><label>Оплата перевізнику</label><input type="number" value={f.carrier_payment} onChange={set('carrier_payment')} /></div>
               <div><label>Перевізник</label>
-                <select value={f.carrier_id} onChange={set('carrier_id')}>
+                <select value={f.carrier_id} onChange={e => e.target.value === '__new__' ? setNewCp({ ...emptyCp, type: 'carrier', target: 'carrier_id' }) : set('carrier_id')(e)}>
                   <option value="">—</option>
                   {cps.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  <option value="__new__">+ Новий перевізник…</option>
                 </select></div>
             </>)}
           </div>
