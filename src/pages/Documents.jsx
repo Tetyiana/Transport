@@ -7,7 +7,7 @@ export default function Documents() {
   const [docs, setDocs] = useState([])
   const [vehicles, setVehicles] = useState([])
   const [drivers, setDrivers] = useState([])
-  const [f, setF] = useState({ doc_type: 'fop_extract', title: '', vehicle_id: '', driver_id: '', file: null })
+  const [f, setF] = useState({ doc_type: 'fop_extract', title: '', vehicle_id: '', driver_id: '', valid_until: '', file: null })
   const [assets, setAssets] = useState({ stamp: false, sign: false })
   const [comp, setComp] = useState({ name: '', edrpou: '', address: '', iban: '', bank: '', director: '', phone: '', vat_mode: 'none' })
   useEffect(() => {
@@ -64,7 +64,7 @@ export default function Documents() {
         vehicle_id: f.vehicle_id || null, driver_id: f.driver_id || null,
       }).eq('id', editId)
       if (error) { alert(error.message); return }
-      setF({ doc_type: 'fop_extract', title: '', vehicle_id: '', driver_id: '', file: null }); setEditId(null); load()
+      setF({ doc_type: 'fop_extract', title: '', vehicle_id: '', driver_id: '', valid_until: '', file: null }); setEditId(null); load()
       return
     }
     if (!f.file) return
@@ -77,7 +77,7 @@ export default function Documents() {
       vehicle_id: f.vehicle_id || null, driver_id: f.driver_id || null,
     })
     if (error) { alert(error.message); return }
-    setF({ doc_type: 'fop_extract', title: '', vehicle_id: '', driver_id: '', file: null }); load()
+    setF({ doc_type: 'fop_extract', title: '', vehicle_id: '', driver_id: '', valid_until: '', file: null }); load()
   }
   const open = async (d) => {
     const { data } = await supabase.storage.from('docs').createSignedUrl(d.file_url, 3600)
