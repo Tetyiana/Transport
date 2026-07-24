@@ -9,6 +9,7 @@ import Counterparties from './pages/Counterparties'
 import Vehicles from './pages/Vehicles'
 import Drivers from './pages/Drivers'
 import Help from './pages/Help'
+import Support from './pages/Support'
 import Money from './pages/Money'
 import Documents from './pages/Documents'
 import Analytics from './pages/Analytics'
@@ -37,6 +38,7 @@ export default function App() {
         <NavLink to="/counterparties">Контрагенти</NavLink>
         <NavLink to="/vehicles">Машини</NavLink>
         <NavLink to="/drivers">Водії</NavLink>
+        <NavLink to="/support">Підтримка</NavLink>
         <NavLink to="/help">Інструкція</NavLink>
         <button className="logout" onClick={() => supabase.auth.signOut()}>Вийти</button>
       </nav>
@@ -52,6 +54,7 @@ export default function App() {
           <Route path="/vehicles" element={<Vehicles />} />
           <Route path="/drivers" element={<Drivers />} />
           <Route path="/help" element={<Help />} />
+          <Route path="/support" element={<Support />} />
         </Routes>
       </main>
     </div>
