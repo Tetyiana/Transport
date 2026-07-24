@@ -4,6 +4,7 @@ import { supabase } from '../supabase'
 import { longPress } from '../longpress'
 import { nbuRate } from '../nbu'
 import { stampPdf } from '../pdfsign'
+import { makeDocPdf } from '../docgen'
 import { TRIP_STATUSES, PAY_FORMS, payFormLabel, DOC_TYPES, docTypeLabel, schemeLabel, PAY_SCHEMES, CURRENCIES } from '../dicts'
 
 const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('uk-UA', { maximumFractionDigits: 2 }))
@@ -31,7 +32,7 @@ export default function TripCard() {
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('trips')
-      .select('*, customer:customer_id(name), carrier:carrier_id(name), vehicle:vehicle_id(name, fuel_norm), driver:driver_id(id, full_name, phone, pay_scheme, pay_percent, rate_km_ua, rate_km_abroad, rate_per_trip, rate_per_trip_currency, taxes_included, telegram_chat_id)')
+      .select('*, customer:customer_id(name, edrpou), carrier:carrier_id(name), vehicle:vehicle_id(name, fuel_norm), driver:driver_id(id, full_name, phone, pay_scheme, pay_percent, rate_km_ua, rate_km_abroad, rate_per_trip, rate_per_trip_currency, taxes_included, telegram_chat_id)')
       .eq('id', id).single()
     setT(data); setEf(data || {})
     supabase.from('trip_events').select('*').eq('trip_id', id).order('sort_order').then(({ data }) => setEvents(data || []))
@@ -186,6 +187,37 @@ export default function TripCard() {
   // Тахо: орієнтовно 65 км/год, до 9 год кермування на добу
   const driveH = km ? km / 65 : null
   const driveDays = driveH ? Math.ceil(driveH / 9) : null
+
+  const genDoc = async (kind) => {
+    try {
+      const { data: comp } = await supabase.from('company_profile').select('*').eq('id', 1).maybeSingle()
+      if (!comp?.name || !comp?.edrpou) { alert('Спочатку заповніть реквізити компанії на сторінці «Документи»'); return }
+      if (!t.freight_amount) { alert('Вкажіть суму фрахту в рейсі'); return }
+      if (!t.customer) { alert('Вкажіть замовника рейсу'); return }
+      const date = today()
+      const number = `${t.number || date.replaceAll('-', '')}${kind === 'act' ? '-А' : ''}`
+      let bytes = await makeDocPdf(kind, { company: comp, customer: t.customer, trip: t, number, date })
+      // печатка і підпис, якщо завантажені
+      const dl = async (p) => {
+        const { data } = await supabase.storage.from('docs').download(p)
+        return data ? new Uint8Array(await data.arrayBuffer()) : null
+      }
+      const stamp = await dl('company/assets/stamp')
+      const sign = await dl('company/assets/sign')
+      if (stamp || sign) bytes = await stampPdf(bytes, stamp, sign, kind === 'act' ? 'left' : 'right')
+      const path = `${id}/${kind}_${Date.now()}.pdf`
+      const { error: upErr } = await supabase.storage.from('docs').upload(path, new Blob([bytes], { type: 'application/pdf' }))
+      if (upErr) { alert(upErr.message); return }
+      await supabase.from('documents').insert({
+        trip_id: id, doc_type: kind === 'act' ? 'act' : 'invoice',
+        title: `${kind === 'act' ? 'Акт' : 'Рахунок'} № ${number} від ${date}`,
+        file_url: path, signed: !!(stamp || sign),
+      })
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }))
+      window.open(url, '_blank')
+      load()
+    } catch (e) { alert('Помилка формування: ' + e.message) }
+  }
 
   const suggestPay = async () => {
     const d = t.driver
@@ -439,6 +471,10 @@ export default function TripCard() {
 
       <div className="panel">
         <h2 style={{ marginTop: 0 }}>Документи</h2>
+        {t.mode === 'carrier' && <div className="row" style={{ marginBottom: 10 }}>
+          <button className="small" onClick={() => genDoc('invoice')}>Сформувати рахунок</button>
+          <button className="small" onClick={() => genDoc('act')}>Сформувати акт</button>
+        </div>}
         {docs.length > 0 && (<>
           <table><tbody>{docs.map(d => (
             <tr key={d.id}>

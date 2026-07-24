@@ -9,6 +9,18 @@ export default function Documents() {
   const [drivers, setDrivers] = useState([])
   const [f, setF] = useState({ doc_type: 'fop_extract', title: '', vehicle_id: '', driver_id: '', file: null })
   const [assets, setAssets] = useState({ stamp: false, sign: false })
+  const [comp, setComp] = useState({ name: '', edrpou: '', address: '', iban: '', bank: '', director: '', phone: '', vat_mode: 'none' })
+  useEffect(() => {
+    supabase.from('company_profile').select('*').eq('id', 1).maybeSingle().then(({ data }) => {
+      if (data) setComp({ ...data })
+    })
+  }, [])
+  const saveComp = async () => {
+    const rec = { ...comp, id: 1 }
+    const { error } = await supabase.from('company_profile').upsert(rec)
+    alert(error ? error.message : 'Реквізити збережено')
+  }
+  const setC = (k) => (e) => setComp({ ...comp, [k]: e.target.value })
   const [editId, setEditId] = useState(null)
 
   const edit = (d) => {
@@ -104,6 +116,23 @@ export default function Documents() {
           <input type="file" style={{ width: 'auto' }} onChange={e => setF({ ...f, file: e.target.files[0] })} />
           <button className="small" onClick={upload}>{editId ? 'Зберегти зміни' : 'Завантажити'}</button>
         </div>
+      </div>
+            <div className="panel">
+        <h2 style={{ marginTop: 0 }}>Реквізити компанії</h2>
+        <p className="muted">Використовуються в рахунках і актах.</p>
+        <div className="grid g4">
+          <div><label>Назва (ФОП/ТОВ)</label><input value={comp.name || ''} onChange={setC('name')} /></div>
+          <div><label>ЄДРПОУ / РНОКПП</label><input value={comp.edrpou || ''} onChange={setC('edrpou')} /></div>
+          <div><label>Адреса</label><input value={comp.address || ''} onChange={setC('address')} /></div>
+          <div><label>IBAN</label><input value={comp.iban || ''} onChange={setC('iban')} /></div>
+          <div><label>Банк</label><input value={comp.bank || ''} onChange={setC('bank')} /></div>
+          <div><label>Керівник / підписант</label><input value={comp.director || ''} onChange={setC('director')} /></div>
+          <div><label>Телефон</label><input value={comp.phone || ''} onChange={setC('phone')} /></div>
+          <div><label>ПДВ</label><select value={comp.vat_mode || 'none'} onChange={setC('vat_mode')}>
+            <option value="none">Без ПДВ</option><option value="included">З ПДВ 20% (у ціні)</option>
+          </select></div>
+        </div>
+        <div style={{ marginTop: 10 }}><button className="small" onClick={saveComp}>Зберегти реквізити</button></div>
       </div>
       <div className="panel">
         <h2 style={{ marginTop: 0 }}>Печатка і підпис</h2>
