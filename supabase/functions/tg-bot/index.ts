@@ -167,8 +167,15 @@ async function handleMessage(msg: Record<string, any>) {
     const path = `trip/${t.id}/tg_${Date.now()}.${ext}`
     const { error: uerr } = await db.storage.from('docs').upload(path, bytes, { contentType: msg.document?.mime_type || 'image/jpeg' })
     if (uerr) { await send(chat_id, 'Помилка збереження файлу: ' + uerr.message); return }
-    await db.from('documents').insert({ trip_id: t.id, doc_type: 'other', title: msg.caption || `Від водія, ${new Date().toISOString().slice(0, 10)}`, file_url: path })
-    await send(chat_id, 'Збережено до документів рейсу.')
+    await setSession(chat_id, 'pick_doc', { path, trip_id: t.id, caption: msg.caption ?? null })
+    await tg('sendMessage', {
+      chat_id, text: 'Що це за документ?',
+      reply_markup: { inline_keyboard: [
+        [{ text: 'CMR / ТТН', callback_data: 'doc:cmr_ttn' }, { text: 'Митна декларація', callback_data: 'doc:customs_declaration' }],
+        [{ text: 'T1', callback_data: 'doc:t1' }, { text: 'Інвойс', callback_data: 'doc:invoice' }],
+        [{ text: 'Акт', callback_data: 'doc:act' }, { text: 'Інше', callback_data: 'doc:other' }],
+      ] },
+    })
     return
   }
 
@@ -291,6 +298,23 @@ async function handleCallback(cb: Record<string, any>) {
     if (!t) { await send(chat_id, 'Активного рейсу немає.'); return }
     await setSession(chat_id, 'await_odo', { field, trip_id: t.id, vehicle_id: t.vehicle?.id ?? null })
     await send(chat_id, `Надішліть покази спідометра (${field === 'odometer_start' ? 'початок' : 'кінець'} рейсу), лише число.`)
+    return
+  }
+
+  if (data.startsWith('doc:')) {
+    const doc_type = data.slice(4)
+    const session = await getSession(chat_id)
+    if (session?.state !== 'pick_doc') return
+    const { path, trip_id, caption } = session.data
+    const labels: Record<string, string> = { cmr_ttn: 'CMR/ТТН', customs_declaration: 'Митна декларація', t1: 'T1', invoice: 'Інвойс', act: 'Акт', other: 'Документ' }
+    const { error } = await db.from('documents').insert({
+      trip_id, doc_type,
+      title: caption || `${labels[doc_type] ?? 'Документ'} від водія, ${new Date().toISOString().slice(0, 10)}`,
+      file_url: path,
+    })
+    await setSession(chat_id, null)
+    if (error) { await send(chat_id, 'Помилка збереження: ' + error.message); return }
+    await send(chat_id, `Збережено: ${labels[doc_type] ?? doc_type}.`)
     return
   }
 

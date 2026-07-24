@@ -53,10 +53,10 @@ export default function Vehicles() {
       )}
       <div className="panel">
         <table>
-          <thead><tr><th>Назва</th><th>Тягач</th><th>Причіп</th><th>Спідометр</th><th>Примітки</th><th></th></tr></thead>
+          <thead><tr><th>Назва</th><th>Тягач</th><th>Причіп</th><th>Спідометр</th><th>Норма, л/100</th><th>Примітки</th><th></th></tr></thead>
           <tbody>{list.map(v => (
             <tr key={v.id} {...longPress(() => edit(v))}><td>{v.name}</td><td>{v.plate_truck}</td><td>{v.plate_trailer}</td>
-              <td>{v.current_odometer?.toLocaleString('uk-UA') ?? '—'}{v.fuel_norm ? ` · ${v.fuel_norm} л/100` : ''}</td><td>{v.notes}</td>
+              <td>{v.current_odometer?.toLocaleString('uk-UA') ?? '—'}</td><td>{v.fuel_norm ?? '—'}</td><td>{v.notes}</td>
               <td><button className="small secondary" onClick={() => edit(v)}>Редагувати</button></td></tr>
           ))}</tbody>
         </table>
