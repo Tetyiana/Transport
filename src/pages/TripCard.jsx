@@ -4,11 +4,13 @@ import { supabase } from '../supabase'
 import { longPress } from '../longpress'
 import { nbuRate } from '../nbu'
 import { stampPdf } from '../pdfsign'
-import { makeDocPdf } from '../docgen'
+import { makeDocPdf, makeTextPdf } from '../docgen'
+import { DEFAULT_TEMPLATES } from '../doctemplates'
 import { TRIP_STATUSES, PAY_FORMS, payFormLabel, DOC_TYPES, docTypeLabel, schemeLabel, PAY_SCHEMES, CURRENCIES } from '../dicts'
 
 const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('uk-UA', { maximumFractionDigits: 2 }))
 const today = () => new Date().toISOString().slice(0, 10)
+const fmtD = (iso) => { const [y, mo, d] = iso.split('-'); return `${d}.${mo}.${y}` }
 
 export default function TripCard() {
   const { id } = useParams()
@@ -32,7 +34,7 @@ export default function TripCard() {
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('trips')
-      .select('*, customer:customer_id(name, edrpou), carrier:carrier_id(name), vehicle:vehicle_id(name, fuel_norm), driver:driver_id(id, full_name, phone, pay_scheme, pay_percent, rate_km_ua, rate_km_abroad, rate_per_trip, rate_per_trip_currency, taxes_included, telegram_chat_id)')
+      .select('*, customer:customer_id(name, edrpou), carrier:carrier_id(id, name, edrpou), vehicle:vehicle_id(name, fuel_norm), driver:driver_id(id, full_name, phone, pay_scheme, pay_percent, rate_km_ua, rate_km_abroad, rate_per_trip, rate_per_trip_currency, taxes_included, telegram_chat_id)')
       .eq('id', id).single()
     setT(data); setEf(data || {})
     supabase.from('trip_events').select('*').eq('trip_id', id).order('sort_order').then(({ data }) => setEvents(data || []))
@@ -227,6 +229,51 @@ export default function TripCard() {
     } catch (e) { alert('Помилка формування: ' + e.message) }
   }
 
+  const genExpDoc = async (tplId) => {
+    try {
+      const { data: comp } = await supabase.from('company_profile').select('*').eq('id', 1).maybeSingle()
+      if (!comp?.name) { alert('Спочатку заповніть реквізити компанії на сторінці «Документи»'); return }
+      if (!t.carrier) { alert('Вкажіть перевізника рейсу'); return }
+      const { data: tpl } = await supabase.from('doc_templates').select('content, title').eq('id', tplId).maybeSingle()
+      const content = tpl?.content || DEFAULT_TEMPLATES[tplId].content
+      const date = today()
+      const vals = {
+        'номер': t.number || date.replaceAll('-', ''), 'дата': fmtD(date),
+        'експедитор': comp.name, 'експедитор_єдрпоу': comp.edrpou || '―', 'експедитор_адреса': comp.address || '―',
+        'експедитор_iban': comp.iban || '―', 'експедитор_банк': comp.bank || '―',
+        'експедитор_директор': comp.director || '―', 'експедитор_телефон': comp.phone || '―',
+        'перевізник': t.carrier.name, 'перевізник_єдрпоу': t.carrier.edrpou || '―',
+        'маршрут': `${t.route_from || '―'} — ${t.route_to || '―'}`,
+        'завантаження': [t.route_from, t.route_from_coords, ...(t.extra_loads || []).map(p => [p.place, p.coords].filter(Boolean).join(' ')).filter(Boolean)].filter(Boolean).join('; ') || '―',
+        'дата_завантаження': t.loading_date ? fmtD(t.loading_date) : '―',
+        'замитнення': [t.customs_out_point, t.customs_out_coords].filter(Boolean).join(' ') || '―',
+        'розмитнення': [t.customs_in_point, t.customs_in_coords].filter(Boolean).join(' ') || '―',
+        'вивантаження': [...(t.extra_unloads || []).map(p => [p.place, p.coords].filter(Boolean).join(' ')).filter(Boolean), [t.route_to, t.route_to_coords].filter(Boolean).join(' ')].filter(Boolean).join('; ') || '―',
+        'дата_розвантаження': t.unloading_date ? fmtD(t.unloading_date) : '―',
+        'вантаж': t.cargo || '―', 'вага': t.cargo_weight || '―', 'вид_авто': t.vehicle_type || '―',
+        'ставка': t.carrier_payment ? fmt(t.carrier_payment) : '―', 'валюта': t.currency || 'UAH',
+      }
+      const text = content.replace(/\{\{(.*?)\}\}/g, (_, k) => vals[k.trim()] ?? '―')
+      let bytes = await makeTextPdf(text)
+      const dl = async (p) => {
+        const { data } = await supabase.storage.from('docs').download(p)
+        return data ? new Uint8Array(await data.arrayBuffer()) : null
+      }
+      const stamp = await dl('company/assets/stamp')
+      const sign = await dl('company/assets/sign')
+      if (stamp || sign) bytes = await stampPdf(bytes, stamp, sign, 'left')
+      const path = `${id}/${tplId}_${Date.now()}.pdf`
+      const { error: upErr } = await supabase.storage.from('docs').upload(path, new Blob([bytes], { type: 'application/pdf' }))
+      if (upErr) { alert(upErr.message); return }
+      await supabase.from('documents').insert({
+        trip_id: id, doc_type: tplId === 'exp_contract' ? 'contract' : 'application',
+        title: `${DEFAULT_TEMPLATES[tplId].title} № ${vals['номер']}`, file_url: path, signed: !!(stamp || sign),
+      })
+      window.open(URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' })), '_blank')
+      load()
+    } catch (e) { alert('Помилка формування: ' + e.message) }
+  }
+
   const suggestPay = async () => {
     const d = t.driver
     if (!d) return
@@ -375,6 +422,9 @@ export default function TripCard() {
             <div><label>Розмитнення (місце)</label><input value={ef.customs_in_point || ''} onChange={setE('customs_in_point')} /></div>
             <div><label>Розмитнення (координати)</label><input value={ef.customs_in_coords || ''} onChange={setE('customs_in_coords')} placeholder="52.22, 21.01" /></div>
             <div><label>Номер зголошення RMPD/SENT</label><input value={ef.rmpd_number || ''} onChange={setE('rmpd_number')} /></div>
+            <div><label>Вантаж</label><input value={ef.cargo || ''} onChange={setE('cargo')} /></div>
+            <div><label>Вага</label><input value={ef.cargo_weight || ''} onChange={setE('cargo_weight')} /></div>
+            <div><label>Вид авто</label><input value={ef.vehicle_type || ''} onChange={setE('vehicle_type')} /></div>
             <div><label>Контакт експедитора</label><input value={ef.expeditor_contact || ''} onChange={setE('expeditor_contact')} /></div>
             <div style={{ gridColumn: '1 / -1' }}><label>Маршрут для водія</label>
               <textarea rows={2} value={ef.route_plan || ''} onChange={setE('route_plan')} placeholder="Київ — Ягодин — Варшава — ..." /></div>
@@ -387,7 +437,10 @@ export default function TripCard() {
         <div className="spread">
           <div className="row muted" style={{ gap: 18 }}>
             <span>Замовник: <b>{t.customer?.name || '—'}</b></span>
-            {t.mode === 'expedition' && <span>Перевізник: <b>{t.carrier?.name || '—'}</b></span>}
+            {t.mode === 'expedition' && <span>Перевізник: <b>{t.carrier?.name || '—'}</b> {t.carrier_payment && (t.carrier_paid_date
+              ? <span className="badge ok">оплачено {t.carrier_paid_date}</span>
+              : <><span className="badge warn">не оплачено {fmt(t.carrier_payment)} {t.currency}</span> <button className="small" onClick={async () => { await supabase.from('trips').update({ carrier_paid_date: today() }).eq('id', id); load() }}>Оплачено перевізнику</button></>)}</span>}
+            {(t.cargo || t.cargo_weight || t.vehicle_type) && <span>Вантаж: <b>{[t.cargo, t.cargo_weight, t.vehicle_type].filter(Boolean).join(', ')}</b></span>}
             {t.mode === 'carrier' && <><span>Машина: <b>{t.vehicle?.name || '—'}</b></span><span>Водій: <b>{t.driver?.full_name || '—'}</b></span></>}
             {km && <span>Пробіг: <b>{km} км</b></span>}
             {driveDays && <span>По тахо: <b>≈ {Math.round(driveH)} год / {driveDays} діб</b></span>}
@@ -494,10 +547,14 @@ export default function TripCard() {
 
       <div className="panel">
         <h2 style={{ marginTop: 0 }}>Документи</h2>
-        {t.mode === 'carrier' && <div className="row" style={{ marginBottom: 10 }}>
+        <div className="row" style={{ marginBottom: 10 }}>
           <button className="small" onClick={() => genDoc('invoice')}>Сформувати рахунок</button>
           <button className="small" onClick={() => genDoc('act')}>Сформувати акт</button>
-        </div>}
+          {t.mode === 'expedition' && <>
+            <button className="small" onClick={() => genExpDoc('exp_contract')}>Договір перевізнику</button>
+            <button className="small" onClick={() => genExpDoc('exp_application')}>Заявка перевізнику</button>
+          </>}
+        </div>
         {docs.length > 0 && (<>
           <table><tbody>{docs.map(d => (
             <tr key={d.id}>

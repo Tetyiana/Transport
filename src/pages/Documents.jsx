@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../supabase'
 import { STAT_DOC_TYPES, docTypeLabel } from '../dicts'
 import { longPress } from '../longpress'
+import { DEFAULT_TEMPLATES, PLACEHOLDERS } from '../doctemplates'
 
 export default function Documents() {
   const [docs, setDocs] = useState([])
@@ -21,6 +22,21 @@ export default function Documents() {
     alert(error ? error.message : 'Реквізити збережено')
   }
   const setC = (k) => (e) => setComp({ ...comp, [k]: e.target.value })
+
+  const [tpls, setTpls] = useState({ exp_contract: '', exp_application: '' })
+  const [tplOpen, setTplOpen] = useState(false)
+  useEffect(() => {
+    supabase.from('doc_templates').select('id, content').then(({ data }) => {
+      const m = { ...tpls }
+      for (const k of Object.keys(DEFAULT_TEMPLATES)) m[k] = data?.find(r => r.id === k)?.content || DEFAULT_TEMPLATES[k].content
+      setTpls(m)
+    })
+  }, [])
+  const saveTpl = async (id) => {
+    const { error } = await supabase.from('doc_templates').upsert({ id, title: DEFAULT_TEMPLATES[id].title, content: tpls[id], updated_at: new Date().toISOString() })
+    alert(error ? error.message : 'Шаблон збережено')
+  }
+  const resetTpl = (id) => setTpls({ ...tpls, [id]: DEFAULT_TEMPLATES[id].content })
   const [editId, setEditId] = useState(null)
 
   const edit = (d) => {
@@ -134,6 +150,23 @@ export default function Documents() {
           </select></div>
         </div>
         <div style={{ marginTop: 10 }}><button className="small" onClick={saveComp}>Зберегти реквізити</button></div>
+      </div>
+
+      <div className="panel">
+        <h2 style={{ marginTop: 0 }}>Шаблони договору і заявки (експедиція) <button className="small secondary" onClick={() => setTplOpen(!tplOpen)}>{tplOpen ? 'Сховати' : 'Редагувати'}</button></h2>
+        {tplOpen && <>
+          <p className="muted">Формуються з картки рейсу в режимі «експедиція». Плейсхолдери підставляються з рейсу і реквізитів: {PLACEHOLDERS.join(' ')}. Шаблони орієнтовні — перед використанням варто погодити з вашим юристом.</p>
+          {Object.keys(DEFAULT_TEMPLATES).map(id => (
+            <div key={id} style={{ marginBottom: 16 }}>
+              <label><b>{DEFAULT_TEMPLATES[id].title}</b></label>
+              <textarea value={tpls[id]} onChange={e => setTpls({ ...tpls, [id]: e.target.value })} rows={14} style={{ width: '100%', fontFamily: 'monospace', fontSize: 12 }} />
+              <div className="row" style={{ marginTop: 6 }}>
+                <button className="small" onClick={() => saveTpl(id)}>Зберегти шаблон</button>
+                <button className="small secondary" onClick={() => resetTpl(id)}>Відновити стандартний</button>
+              </div>
+            </div>
+          ))}
+        </>}
       </div>
       <div className="panel">
         <h2 style={{ marginTop: 0 }}>Печатка і підпис</h2>

@@ -5,7 +5,7 @@ import { TRIP_STATUSES, statusLabel, CARRIER_CHECKLIST, EXPEDITION_CHECKLIST } f
 
 const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('uk-UA'))
 const emptyCp = { name: '', type: 'expedition', edrpou: '' }
-const empty = { mode: 'carrier', number: '', customer_id: '', carrier_id: '', vehicle_id: '', driver_id: '', route_from: '', route_to: '', freight_amount: '', commission_amount: '', carrier_payment: '', currency: 'UAH' }
+const empty = { mode: 'carrier', number: '', customer_id: '', carrier_id: '', vehicle_id: '', driver_id: '', route_from: '', route_to: '', cargo: '', cargo_weight: '', vehicle_type: '', freight_amount: '', commission_amount: '', carrier_payment: '', currency: 'UAH' }
 
 export default function Trips() {
   const nav = useNavigate()
@@ -100,6 +100,9 @@ export default function Trips() {
             </>}
             <div><label>Звідки</label><input value={f.route_from} onChange={set('route_from')} /></div>
             <div><label>Куди</label><input value={f.route_to} onChange={set('route_to')} /></div>
+            <div><label>Вантаж</label><input value={f.cargo} onChange={set('cargo')} /></div>
+            <div><label>Вага</label><input value={f.cargo_weight} onChange={set('cargo_weight')} placeholder="22 т" /></div>
+            <div><label>Вид авто</label><input value={f.vehicle_type} onChange={set('vehicle_type')} placeholder="тент / реф / зерновоз" /></div>
             <div><label>Валюта</label>
               <select value={f.currency} onChange={set('currency')}>
                 <option>UAH</option><option>EUR</option><option>USD</option><option>PLN</option>
@@ -119,6 +122,7 @@ export default function Trips() {
             </>) : (<>
               <div><label>Фрахт (загальний)</label><input type="number" value={f.freight_amount} onChange={set('freight_amount')} /></div>
               <div><label>Комісія (наш дохід)</label><input type="number" value={f.commission_amount} onChange={set('commission_amount')} /></div>
+              <div><label>Оплата перевізнику</label><input type="number" value={f.carrier_payment} onChange={set('carrier_payment')} /></div>
               <div><label>Перевізник</label>
                 <select value={f.carrier_id} onChange={set('carrier_id')}>
                   <option value="">—</option>

@@ -149,3 +149,40 @@ export async function makeDocPdf(kind, { company, customer, trip, number, date }
 
   return doc.save()
 }
+
+// Багатосторінковий PDF з тексту шаблону (договір, заявка).
+export async function makeTextPdf(text) {
+  const { r, b } = await loadFonts()
+  const doc = await PDFDocument.create()
+  doc.registerFontkit(fontkit)
+  const font = await doc.embedFont(r, { subset: true })
+  const bold = await doc.embedFont(b, { subset: true })
+  const W = 595.28, H = 841.89, M = 45
+  let page = doc.addPage([W, H])
+  let y = H - 50
+  const newPage = () => { page = doc.addPage([W, H]); y = H - 50 }
+  const lines = String(text).replaceAll('\r', '').split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i]
+    const isHead = i === 0 || /^\d+\. [А-ЯІЇЄҐA-Z]/.test(raw) || /^[А-ЯІЇЄҐ\s№.,:;()\-\d]+$/.test(raw.trim()) && raw.trim().length > 3 && raw === raw.toUpperCase() && /[А-ЯІЇЄҐ]/.test(raw)
+    const f = isHead ? bold : font
+    const size = i === 0 ? 12 : 9.5
+    if (!raw.trim()) { y -= 8; if (y < 60) newPage(); continue }
+    // перенос довгих рядків зі збереженням відступу
+    const words = raw.split(' ')
+    let cur = ''
+    const flush = () => {
+      if (y < 60) newPage()
+      page.drawText(cur, { x: M, y, size, font: f })
+      y -= size + 4.5
+      cur = ''
+    }
+    for (const w of words) {
+      const probe = cur ? cur + ' ' + w : w
+      if (f.widthOfTextAtSize(probe, size) > W - 2 * M && cur) flush(), cur = w
+      else cur = probe
+    }
+    if (cur) flush()
+  }
+  return doc.save()
+}

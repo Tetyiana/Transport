@@ -3,7 +3,7 @@ import { supabase } from '../supabase'
 import { CP_TYPES, cpTypeLabel, CONTRACT_FORMS } from '../dicts'
 import { longPress } from '../longpress'
 
-const empty = { type: 'expedition', name: '', edrpou: '', contract_form: '', payment_terms_days: '', notes: '' }
+const empty = { type: 'expedition', name: '', edrpou: '', contract_form: '', payment_terms_days: '', rating: '', notes: '' }
 
 export default function Counterparties() {
   const [list, setList] = useState([])
@@ -27,6 +27,7 @@ export default function Counterparties() {
     const rec = { ...f }
     if (!rec.contract_form) rec.contract_form = null
     if (rec.payment_terms_days === '') rec.payment_terms_days = null
+    rec.rating = rec.rating === '' ? null : Number(rec.rating)
     const { error } = editId
       ? await supabase.from('counterparties').update(rec).eq('id', editId)
       : await supabase.from('counterparties').insert(rec)
@@ -51,6 +52,10 @@ export default function Counterparties() {
               </select></div>
             <div><label>Назва</label><input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></div>
             <div><label>ЄДРПОУ / ІПН</label><input value={f.edrpou} onChange={e => setF({ ...f, edrpou: e.target.value })} /></div>
+            <div><label>Оцінка надійності (1–5)</label>
+              <select value={f.rating || ''} onChange={e => setF({ ...f, rating: e.target.value })}>
+                <option value="">—</option>{[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{'★'.repeat(n)}</option>)}
+              </select></div>
             <div><label>Форма договору</label>
               <select value={f.contract_form} onChange={e => setF({ ...f, contract_form: e.target.value })}>
                 <option value="">—</option>
