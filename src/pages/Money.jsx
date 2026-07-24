@@ -25,14 +25,14 @@ export default function Money() {
   const [cats, setCats] = useState([])
   const [vehicles, setVehicles] = useState([])
   const [tab, setTab] = useState('incomes')
-  const [exf, setExf] = useState({ vehicle_id: '', category_id: '', amount: '', payment_form: 'bank', expense_date: today(), note: '' })
+  const [exf, setExf] = useState({ vehicle_id: '', category_id: '', amount: '', payment_form: 'bank', expense_date: today(), note: '', liters: '' })
   const [newCat, setNewCat] = useState('')
   const [exEditId, setExEditId] = useState(null)
   const nav = useNavigate()
 
   const editExpense = (e) => {
     setExf({ vehicle_id: e.vehicle_id || '', category_id: e.category_id || '', amount: e.amount,
-      payment_form: e.payment_form || 'bank', expense_date: e.expense_date, note: e.note || '' })
+      payment_form: e.payment_form || 'bank', expense_date: e.expense_date, note: e.note || '', liters: e.liters || '' })
     setExEditId(e.id); setTab('expenses')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -54,12 +54,12 @@ export default function Money() {
   }
   const addExpense = async () => {
     if (!exf.category_id || !exf.amount || (!exf.vehicle_id && !exEditId)) { alert('Вкажіть машину, категорію і суму'); return }
-    const rec = { ...exf, vehicle_id: exf.vehicle_id || null, note: exf.note || null }
+    const rec = { ...exf, vehicle_id: exf.vehicle_id || null, note: exf.note || null, liters: exf.liters || null }
     const { error } = exEditId
       ? await supabase.from('expenses').update(rec).eq('id', exEditId)
       : await supabase.from('expenses').insert(rec)
     if (error) { alert(error.message); return }
-    setExf({ vehicle_id: '', category_id: '', amount: '', payment_form: 'bank', expense_date: today(), note: '' })
+    setExf({ vehicle_id: '', category_id: '', amount: '', payment_form: 'bank', expense_date: today(), note: '', liters: '' })
     setExEditId(null); load()
   }
   const addCategory = async () => {
@@ -126,6 +126,7 @@ export default function Money() {
                 {cats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select></div>
             <div><label>Сума</label><input type="number" value={exf.amount} onChange={e => setExf({ ...exf, amount: e.target.value })} /></div>
+          <div><label>Літри (пальне)</label><input type="number" value={exf.liters} onChange={e => setExf({ ...exf, liters: e.target.value })} /></div>
             <div><label>Дата</label><input type="date" value={exf.expense_date} onChange={e => setExf({ ...exf, expense_date: e.target.value })} /></div>
             <div><label>Форма оплати</label>
               <select value={exf.payment_form} onChange={e => setExf({ ...exf, payment_form: e.target.value })}>
@@ -133,7 +134,7 @@ export default function Money() {
               </select></div>
             <div><label>Примітка</label><input value={exf.note} onChange={e => setExf({ ...exf, note: e.target.value })} /></div>
           </div>
-          <div style={{ marginTop: 10 }} className="row"><button className="small" onClick={addExpense}>{exEditId ? 'Зберегти зміни' : 'Додати витрату'}</button>{exEditId && <button className="small secondary" onClick={() => { setExEditId(null); setExf({ vehicle_id: '', category_id: '', amount: '', payment_form: 'bank', expense_date: today(), note: '' }) }}>Скасувати</button>}</div>
+          <div style={{ marginTop: 10 }} className="row"><button className="small" onClick={addExpense}>{exEditId ? 'Зберегти зміни' : 'Додати витрату'}</button>{exEditId && <button className="small secondary" onClick={() => { setExEditId(null); setExf({ vehicle_id: '', category_id: '', amount: '', payment_form: 'bank', expense_date: today(), note: '', liters: '' }) }}>Скасувати</button>}</div>
           <div className="row" style={{ marginTop: 14 }}>
             <input style={{ width: 220 }} placeholder="Нова категорія витрат" value={newCat} onChange={e => setNewCat(e.target.value)} />
             <button className="small secondary" onClick={addCategory}>Додати категорію</button>

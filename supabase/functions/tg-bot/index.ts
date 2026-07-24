@@ -146,12 +146,31 @@ async function handleMessage(msg: Record<string, any>) {
     if (!d) { await send(chat_id, 'Код не знайдено. Перевірте і спробуйте ще раз: /start КОД'); return }
     await db.from('drivers').update({ telegram_chat_id: chat_id }).eq('id', d.id)
     await setSession(chat_id, null)
-    await send(chat_id, `Готово, ${d.full_name}! Ви підключені.\nКнопки внизу: рейс, спідометр, витрати.`)
+    await send(chat_id, `Готово, ${d.full_name}! Ви підключені.\nКнопки внизу: рейс, спідометр, витрати.\nФото CMR, чеків чи інших документів просто надсилайте в цей чат — прикріплю до активного рейсу.`)
     return
   }
 
   const driver = await getDriver(chat_id)
   if (!driver) { await send(chat_id, 'Ви ще не підключені. Надішліть: /start КОД'); return }
+
+  // фото або файл від водія → у документи активного рейсу
+  if (msg.photo || msg.document) {
+    const t = await activeTrip(driver.id)
+    if (!t) { await send(chat_id, 'Немає активного рейсу — документ не прикріплено.'); return }
+    const fileId = msg.photo ? msg.photo[msg.photo.length - 1].file_id : msg.document.file_id
+    const fi = await tg('getFile', { file_id: fileId })
+    const fp = fi?.result?.file_path
+    if (!fp) { await send(chat_id, 'Не вдалося отримати файл від Telegram.'); return }
+    const resp = await fetch(`https://api.telegram.org/file/bot${TOKEN}/${fp}`)
+    const bytes = await resp.arrayBuffer()
+    const ext = (fp.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
+    const path = `trip/${t.id}/tg_${Date.now()}.${ext}`
+    const { error: uerr } = await db.storage.from('docs').upload(path, bytes, { contentType: msg.document?.mime_type || 'image/jpeg' })
+    if (uerr) { await send(chat_id, 'Помилка збереження файлу: ' + uerr.message); return }
+    await db.from('documents').insert({ trip_id: t.id, doc_type: 'other', title: msg.caption || `Від водія, ${new Date().toISOString().slice(0, 10)}`, file_url: path })
+    await send(chat_id, 'Збережено до документів рейсу.')
+    return
+  }
 
   if (text === '/cancel' || text === 'Скасувати') {
     await setSession(chat_id, null)
@@ -181,7 +200,21 @@ async function handleMessage(msg: Record<string, any>) {
   if (session?.state === 'await_amount') {
     const p = parseAmount(text)
     if (!p) { await send(chat_id, 'Не зрозумів суму. Приклади: 1500 / 550 eur / 200 pln / 40 usd. Або «Скасувати».'); return }
+    if (/паль|диз|бенз|adblue|fuel/i.test(session.data.cat_name ?? '')) {
+      await setSession(chat_id, 'await_liters', { ...session.data, ...p })
+      await send(chat_id, 'Скільки літрів? (лише число, напр. 350 або 120.5)')
+      return
+    }
     await setSession(chat_id, 'await_note', { ...session.data, ...p })
+    await send(chat_id, 'Примітка (наприклад «заправка Orlen»). Якщо без примітки — надішліть «-».')
+    return
+  }
+
+  // --- очікуємо літри пального ---
+  if (session?.state === 'await_liters') {
+    const l = parseFloat(text.replace(',', '.'))
+    if (!l || l <= 0) { await send(chat_id, 'Надішліть кількість літрів числом, напр. 350. Або «Скасувати».'); return }
+    await setSession(chat_id, 'await_note', { ...session.data, liters: l })
     await send(chat_id, 'Примітка (наприклад «заправка Orlen»). Якщо без примітки — надішліть «-».')
     return
   }
@@ -189,12 +222,12 @@ async function handleMessage(msg: Record<string, any>) {
   // --- очікуємо примітку, зберігаємо витрату ---
   if (session?.state === 'await_note') {
     const note = text === '-' ? null : text
-    const { category_id, trip_id, vehicle_id, amount, currency } = session.data
+    const { category_id, trip_id, vehicle_id, amount, currency, liters } = session.data
     const expense_date = new Date().toISOString().slice(0, 10)
     const rate = await nbuRate(currency, expense_date)
     const rec: Record<string, unknown> = {
       trip_id, vehicle_id: vehicle_id || null, category_id,
-      amount, currency, expense_date, payment_form: 'cash', note,
+      amount, currency, expense_date, payment_form: 'cash', note, liters: liters ?? null,
     }
     if (rate) { rec.rate = rate; rec.amount_uah = Math.round(amount * rate * 100) / 100 }
     const { error } = await db.from('expenses').insert(rec)
@@ -230,9 +263,10 @@ async function handleMessage(msg: Record<string, any>) {
     if (!t) { await send(chat_id, 'Активного рейсу немає — витрату внесе диспетчер у застосунку.'); return }
     const { data: cats } = await db.from('expense_categories')
       .select('id, name').in('scope', ['carrier', 'both']).order('name')
+    const visible = (cats ?? []).filter(c => !/оренд|податк/i.test(c.name))
     const rows: { text: string; callback_data: string }[][] = []
-    for (let i = 0; i < (cats?.length ?? 0); i += 2) {
-      rows.push(cats!.slice(i, i + 2).map(c => ({ text: c.name, callback_data: `cat:${c.id}` })))
+    for (let i = 0; i < visible.length; i += 2) {
+      rows.push(visible.slice(i, i + 2).map(c => ({ text: c.name, callback_data: `cat:${c.id}` })))
     }
     await setSession(chat_id, 'pick_cat', { trip_id: t.id, vehicle_id: t.vehicle?.id ?? null })
     await tg('sendMessage', { chat_id, text: 'Категорія витрати:', reply_markup: { inline_keyboard: rows } })
@@ -264,7 +298,8 @@ async function handleCallback(cb: Record<string, any>) {
     const category_id = data.slice(4)
     const session = await getSession(chat_id)
     if (session?.state !== 'pick_cat') return
-    await setSession(chat_id, 'await_amount', { ...session.data, category_id })
+    const { data: cat } = await db.from('expense_categories').select('name').eq('id', category_id).maybeSingle()
+    await setSession(chat_id, 'await_amount', { ...session.data, category_id, cat_name: cat?.name ?? '' })
     await send(chat_id, 'Сума. Приклади: 1500 (грн) / 550 eur / 200 pln / 40 usd.')
     return
   }

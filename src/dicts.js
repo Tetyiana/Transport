@@ -107,3 +107,14 @@ export const EXPEDITION_CHECKLIST = [
   'Оплату від замовника отримано',
   'Перевізнику оплачено',
 ]
+
+// Системи оподаткування для безготівкового фрахту
+export const TAX_SYSTEMS = [
+  ['tov_single', 'ТОВ, єдиний 3 гр 5%'],
+  ['tov_single_vat', 'ТОВ, єдиний 3 гр 3% + ПДВ'],
+  ['tov_general_vat', 'ТОВ, загальна + ПДВ'],
+  ['fop_single_5', 'ФОП, єдиний 3 гр 5%'],
+  ['fop_single_3_vat', 'ФОП, єдиний 3 гр 3% + ПДВ'],
+  ['fop_general_vat', 'ФОП, загальна + ПДВ'],
+]
+export const taxSystemLabel = (s) => Object.fromEntries(TAX_SYSTEMS)[s] || s

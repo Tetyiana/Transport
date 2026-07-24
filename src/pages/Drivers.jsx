@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabase'
-import { PAY_SCHEMES, schemeLabel } from '../dicts'
+import { PAY_SCHEMES, schemeLabel, CURRENCIES } from '../dicts'
 import { longPress } from '../longpress'
 
-const empty = { full_name: '', phone: '', pay_scheme: 'percent_freight', pay_percent: '', rate_km_ua: '', rate_km_abroad: '', rate_per_trip: '', taxes_included: true }
+const empty = { full_name: '', phone: '', pay_scheme: 'percent_freight', pay_percent: '', rate_km_ua: '', rate_km_abroad: '', rate_per_trip: '', rate_per_trip_currency: 'UAH', taxes_included: true }
 
 export default function Drivers() {
   const [list, setList] = useState([])
@@ -61,7 +61,8 @@ export default function Drivers() {
               <div><label>Ставка/км закордон</label><input type="number" value={f.rate_km_abroad} onChange={e => setF({ ...f, rate_km_abroad: e.target.value })} /></div>
             </>}
             {f.pay_scheme === 'per_trip' &&
-              <div><label>Ставка за рейс</label><input type="number" value={f.rate_per_trip} onChange={e => setF({ ...f, rate_per_trip: e.target.value })} /></div>}
+              <><div><label>Ставка за рейс</label><input type="number" value={f.rate_per_trip} onChange={e => setF({ ...f, rate_per_trip: e.target.value })} /></div>
+              <div><label>Валюта ставки</label><select value={f.rate_per_trip_currency || 'UAH'} onChange={e => setF({ ...f, rate_per_trip_currency: e.target.value })}>{CURRENCIES.map(c => <option key={c}>{c}</option>)}</select></div></>}
             <div><label>Податки</label>
               <select value={f.taxes_included ? '1' : '0'} onChange={e => setF({ ...f, taxes_included: e.target.value === '1' })}>
                 <option value="1">Включено в ставку</option>
@@ -78,7 +79,7 @@ export default function Drivers() {
             <tr key={d.id} {...longPress(() => edit(d))}>
               <td>{d.full_name}</td><td>{d.phone}</td>
               <td><span className="badge">{schemeLabel(d.pay_scheme)}</span></td>
-              <td>{d.pay_percent ? `${d.pay_percent}%` : d.rate_per_trip ? d.rate_per_trip : (d.rate_km_ua || d.rate_km_abroad) ? `${d.rate_km_ua ?? '—'} / ${d.rate_km_abroad ?? '—'} за км` : '—'}</td>
+              <td>{d.pay_percent ? `${d.pay_percent}%` : d.rate_per_trip ? `${d.rate_per_trip} ${d.rate_per_trip_currency || 'UAH'}` : (d.rate_km_ua || d.rate_km_abroad) ? `${d.rate_km_ua ?? '—'} / ${d.rate_km_abroad ?? '—'} за км` : '—'}</td>
               <td>{d.taxes_included ? 'включено' : 'окремо'}</td>
               <td><button className="small secondary" onClick={() => edit(d)}>Редагувати</button></td>
               <td>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../supabase'
 import { longPress } from '../longpress'
 
-const empty = { name: '', plate_truck: '', plate_trailer: '', current_odometer: '', notes: '' }
+const empty = { name: '', plate_truck: '', plate_trailer: '', current_odometer: '', fuel_norm: '', notes: '' }
 
 export default function Vehicles() {
   const [list, setList] = useState([])
@@ -24,6 +24,7 @@ export default function Vehicles() {
     if (!f.name) return
     const rec = { ...f }
     if (rec.current_odometer === '') rec.current_odometer = null
+    if (rec.fuel_norm === '') rec.fuel_norm = null
     const { error } = editId
       ? await supabase.from('vehicles').update(rec).eq('id', editId)
       : await supabase.from('vehicles').insert(rec)
@@ -44,6 +45,7 @@ export default function Vehicles() {
             <div><label>Номер тягача</label><input value={f.plate_truck} onChange={e => setF({ ...f, plate_truck: e.target.value })} /></div>
             <div><label>Номер причепа</label><input value={f.plate_trailer} onChange={e => setF({ ...f, plate_trailer: e.target.value })} /></div>
             <div><label>Поточний спідометр</label><input type="number" value={f.current_odometer} onChange={e => setF({ ...f, current_odometer: e.target.value })} /></div>
+            <div><label>Норма пального, л/100 км</label><input type="number" value={f.fuel_norm} onChange={e => setF({ ...f, fuel_norm: e.target.value })} /></div>
             <div><label>Примітки</label><input value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} /></div>
           </div>
           <div style={{ marginTop: 12 }}><button onClick={save}>{editId ? 'Зберегти зміни' : 'Зберегти'}</button></div>
@@ -54,7 +56,7 @@ export default function Vehicles() {
           <thead><tr><th>Назва</th><th>Тягач</th><th>Причіп</th><th>Спідометр</th><th>Примітки</th><th></th></tr></thead>
           <tbody>{list.map(v => (
             <tr key={v.id} {...longPress(() => edit(v))}><td>{v.name}</td><td>{v.plate_truck}</td><td>{v.plate_trailer}</td>
-              <td>{v.current_odometer?.toLocaleString('uk-UA') ?? '—'}</td><td>{v.notes}</td>
+              <td>{v.current_odometer?.toLocaleString('uk-UA') ?? '—'}{v.fuel_norm ? ` · ${v.fuel_norm} л/100` : ''}</td><td>{v.notes}</td>
               <td><button className="small secondary" onClick={() => edit(v)}>Редагувати</button></td></tr>
           ))}</tbody>
         </table>
