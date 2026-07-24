@@ -4,12 +4,14 @@ import { supabase } from '../supabase'
 import { TRIP_STATUSES, statusLabel, CARRIER_CHECKLIST, EXPEDITION_CHECKLIST } from '../dicts'
 
 const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('uk-UA'))
+const emptyCp = { name: '', type: 'expedition', edrpou: '' }
 const empty = { mode: 'carrier', number: '', customer_id: '', carrier_id: '', vehicle_id: '', driver_id: '', route_from: '', route_to: '', freight_amount: '', commission_amount: '', carrier_payment: '', currency: 'UAH' }
 
 export default function Trips() {
   const nav = useNavigate()
   const [trips, setTrips] = useState([])
   const [cps, setCps] = useState([])
+  const [newCp, setNewCp] = useState(null) // null = сховано, обʼєкт = форма відкрита
   const [vehicles, setVehicles] = useState([])
   const [drivers, setDrivers] = useState([])
   const [filter, setFilter] = useState('active')
@@ -22,9 +24,22 @@ export default function Trips() {
       .order('created_at', { ascending: false })
       .then(({ data }) => setTrips(data || []))
   }
+  const loadCps = () => supabase.from('counterparties').select('id,name,type').eq('active', true).then(({ data }) => setCps(data || []))
+
+  const createCp = async () => {
+    if (!newCp?.name) { alert('Вкажіть назву'); return }
+    const { data, error } = await supabase.from('counterparties')
+      .insert({ name: newCp.name, type: newCp.type, edrpou: newCp.edrpou || null })
+      .select('id,name,type').single()
+    if (error) { alert(error.message); return }
+    await loadCps()
+    setF(prev => ({ ...prev, customer_id: data.id }))
+    setNewCp(null)
+  }
+
   useEffect(() => {
     load()
-    supabase.from('counterparties').select('id,name,type').eq('active', true).then(({ data }) => setCps(data || []))
+    loadCps()
     supabase.from('vehicles').select('id,name').eq('active', true).then(({ data }) => setVehicles(data || []))
     supabase.from('drivers').select('id,full_name').eq('active', true).then(({ data }) => setDrivers(data || []))
   }, [])
@@ -66,10 +81,23 @@ export default function Trips() {
               </select></div>
             <div><label>Номер рейсу</label><input value={f.number} onChange={set('number')} placeholder="напр. 2026-041" /></div>
             <div><label>Замовник</label>
-              <select value={f.customer_id} onChange={set('customer_id')}>
+              <select value={f.customer_id} onChange={e => e.target.value === '__new__' ? setNewCp({ ...emptyCp }) : set('customer_id')(e)}>
                 <option value="">—</option>
                 {cps.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                <option value="__new__">+ Новий контрагент…</option>
               </select></div>
+            {newCp && <>
+              <div><label>Назва нового контрагента</label><input value={newCp.name} onChange={e => setNewCp({ ...newCp, name: e.target.value })} /></div>
+              <div><label>Тип</label>
+                <select value={newCp.type} onChange={e => setNewCp({ ...newCp, type: e.target.value })}>
+                  <option value="expedition">Експедиція</option><option value="shipper">Вантажовідправник</option><option value="other">Інше</option>
+                </select></div>
+              <div><label>ЄДРПОУ (необов'язково)</label><input value={newCp.edrpou} onChange={e => setNewCp({ ...newCp, edrpou: e.target.value })} /></div>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+                <button className="small" onClick={createCp}>Створити</button>
+                <button className="small secondary" onClick={() => setNewCp(null)}>Скасувати</button>
+              </div>
+            </>}
             <div><label>Звідки</label><input value={f.route_from} onChange={set('route_from')} /></div>
             <div><label>Куди</label><input value={f.route_to} onChange={set('route_to')} /></div>
             <div><label>Валюта</label>
