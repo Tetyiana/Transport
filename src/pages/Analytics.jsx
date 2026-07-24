@@ -18,14 +18,14 @@ export default function Analytics() {
   const [from, setFrom] = useState(`${year}-01-01`)
   const [to, setTo] = useState(new Date().toISOString().slice(0, 10))
   const [trips, setTrips] = useState([])
+  const [tick, setTick] = useState(0)
   const [expenses, setExpenses] = useState([])
   const [incomes, setIncomes] = useState([])
   const [vehicles, setVehicles] = useState([])
 
   useEffect(() => {
-    supabase.from('trips').select('*, customer:customer_id(id, name, type), vehicle:vehicle_id(id, name)')
+    supabase.from('trips').select('*, customer:customer_id(id, name, type), vehicle:vehicle_id(id, name), carrier:carrier_id(id, name, rating)')
       .gte('created_at', from).lte('created_at', to + 'T23:59:59')
-      .neq('status', 'cancelled')
       .then(({ data }) => setTrips(data || []))
     supabase.from('expenses').select('*')
       .gte('expense_date', from).lte('expense_date', to)
@@ -34,7 +34,7 @@ export default function Analytics() {
       .gte('income_date', from).lte('income_date', to)
       .then(({ data }) => setIncomes(data || []))
     supabase.from('vehicles').select('id,name').then(({ data }) => setVehicles(data || []))
-  }, [from, to])
+  }, [from, to, tick])
 
   const expByTrip = useMemo(() => {
     const m = {}
@@ -43,7 +43,7 @@ export default function Analytics() {
   }, [expenses])
 
   // Рейси з прибутком
-  const tripRows = useMemo(() => trips.map(t => {
+  const tripRows = useMemo(() => trips.filter(t => t.status !== 'cancelled').map(t => {
     const rev = tripRevUah(t)
     const spent = expByTrip[t.id] || 0
     const km = (t.odometer_start && t.odometer_end) ? t.odometer_end - t.odometer_start : (Number(t.km_ua || 0) + Number(t.km_abroad || 0)) || null
@@ -51,6 +51,36 @@ export default function Analytics() {
   }), [trips, expByTrip])
 
   // Рентабельність по машинах: рейсові + прямі витрати машини
+  // Експедиція
+  const expTrips = useMemo(() => trips.filter(t => t.mode === 'expedition' && t.status !== 'cancelled'), [trips])
+  const exp = useMemo(() => {
+    const r = (t) => t.currency === 'UAH' ? 1 : (t.nbu_rate || 1)
+    const ids = new Set(expTrips.map(t => t.id))
+    const paidToUs = incomes.filter(i => ids.has(i.trip_id)).reduce((s, i) => s + Number(i.amount_uah ?? (i.currency === 'UAH' ? i.amount : 0)), 0)
+    const freight = expTrips.reduce((s, t) => s + Number(t.freight_amount || 0) * r(t), 0)
+    const paidByUs = expTrips.filter(t => t.carrier_paid_date).reduce((s, t) => s + Number(t.carrier_payment || 0) * r(t), 0)
+    const creditor = expTrips.filter(t => !t.carrier_paid_date).reduce((s, t) => s + Number(t.carrier_payment || 0) * r(t), 0)
+    const gross = expTrips.reduce((s, t) => s + (t.commission_amount ? Number(t.commission_amount) * r(t) : (Number(t.freight_amount || 0) - Number(t.carrier_payment || 0)) * r(t)), 0)
+    const otherExp = expenses.filter(e => ids.has(e.trip_id)).reduce((s, e) => s + expUah(e), 0)
+    return { paidToUs, debtor: freight - paidToUs, paidByUs, creditor, gross, flow: paidToUs - paidByUs - otherExp }
+  }, [expTrips, incomes, expenses])
+
+  const carrierRows = useMemo(() => {
+    const m = {}
+    for (const t of trips.filter(t => t.mode === 'expedition' && t.carrier)) {
+      const k = t.carrier.id
+      m[k] = m[k] || { id: k, name: t.carrier.name, rating: t.carrier.rating, total: 0, cancelled: 0, sum: 0 }
+      m[k].total++
+      if (t.status === 'cancelled') m[k].cancelled++
+      else m[k].sum += Number(t.carrier_payment || 0) * (t.currency === 'UAH' ? 1 : (t.nbu_rate || 1))
+    }
+    return Object.values(m).sort((a, b) => b.total - a.total)
+  }, [trips])
+  const setRating = async (cid, v) => {
+    await supabase.from('counterparties').update({ rating: v || null }).eq('id', cid)
+    setTick(x => x + 1)
+  }
+
   const vehicleRows = useMemo(() => {
     const direct = {}
     for (const e of expenses) if (!e.trip_id && e.vehicle_id) direct[e.vehicle_id] = (direct[e.vehicle_id] || 0) + expUah(e)
@@ -177,6 +207,35 @@ export default function Analytics() {
         </table>
         {cashflow.length === 0 && <p className="muted">Немає руху за період.</p>}
       </div>
+
+      {expTrips.length > 0 && (
+        <div className="panel">
+          <h2 style={{ marginTop: 0 }}>Експедиція</h2>
+          <div className="stats">
+            <div className="stat"><div className="num">{fmt(exp.paidToUs)}</div><div className="lbl">Оплачено нам, грн</div></div>
+            <div className="stat"><div className="num">{fmt(exp.debtor)}</div><div className="lbl">Дебіторка, грн</div></div>
+            <div className="stat"><div className="num">{fmt(exp.paidByUs)}</div><div className="lbl">Ми оплатили, грн</div></div>
+            <div className="stat"><div className="num">{fmt(exp.creditor)}</div><div className="lbl">Кредиторка, грн</div></div>
+            <div className="stat"><div className="num">{fmt(exp.gross)}</div><div className="lbl">Валовий дохід, грн</div></div>
+            <div className="stat"><div className="num" style={{ color: exp.flow >= 0 ? 'var(--ok)' : 'var(--danger)' }}>{fmt(exp.flow)}</div><div className="lbl">Грошовий потік, грн</div></div>
+          </div>
+          <h2>Надійність перевізників</h2>
+          <table>
+            <thead><tr><th>Перевізник</th><th>Рейсів</th><th>Скасовано</th><th>Оплачено їм, грн</th><th>Ваша оцінка</th></tr></thead>
+            <tbody>{carrierRows.map(c => (
+              <tr key={c.id}>
+                <td>{c.name}</td><td>{c.total}</td>
+                <td>{c.cancelled ? <span className="badge danger">{c.cancelled}</span> : '—'}</td>
+                <td>{fmt(c.sum)}</td>
+                <td><select value={c.rating || ''} onChange={e => setRating(c.id, Number(e.target.value))}>
+                  <option value="">—</option>{[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{'★'.repeat(n)}</option>)}
+                </select></td>
+              </tr>
+            ))}</tbody>
+          </table>
+          <p className="muted">Оцінка — ваша суб'єктивна (1–5), зберігається в картці контрагента. Об'єктивні сигнали поруч: скільки рейсів віддавали і скільки з них зірвалось.</p>
+        </div>
+      )}
 
       <div className="panel">
         <h2 style={{ marginTop: 0 }}>Дисципліна оплат замовників</h2>
