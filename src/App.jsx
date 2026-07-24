@@ -29,7 +29,7 @@ export default function App() {
     <div className="layout">
       <nav className="sidebar">
         <div className="brand">TirKolija</div>
-        <NavLink to="/" end>Дашборд</NavLink>
+        <NavLink to="/" end>Головна</NavLink>
         <NavLink to="/trips">Рейси</NavLink>
         <NavLink to="/money">Гроші</NavLink>
         <NavLink to="/analytics">Аналітика</NavLink>

@@ -55,7 +55,7 @@ export default function Dashboard() {
 
   return (
     <div>
-      <h1>Дашборд</h1>
+      <h1>Головна</h1>
       <div className="cards">
         <div className="stat"><div className="num">{active.length}</div><div className="lbl">Активні рейси</div></div>
         <div className="stat"><div className="num">{overdue.length}</div><div className="lbl">Прострочені оплати</div></div>
