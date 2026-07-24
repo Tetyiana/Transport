@@ -200,7 +200,7 @@ export default function TripCard() {
 
   const genDoc = async (kind) => {
     try {
-      const { data: comp } = await supabase.from('company_profile').select('*').eq('id', 1).maybeSingle()
+      const { data: comp } = await supabase.from('company_profile').select('*').limit(1).maybeSingle()
       if (!comp?.name || !comp?.edrpou) { alert('Спочатку заповніть реквізити компанії на сторінці «Документи»'); return }
       if (!t.freight_amount) { alert('Вкажіть суму фрахту в рейсі'); return }
       if (!t.customer) { alert('Вкажіть замовника рейсу'); return }
@@ -231,7 +231,7 @@ export default function TripCard() {
 
   const genExpDoc = async (tplId) => {
     try {
-      const { data: comp } = await supabase.from('company_profile').select('*').eq('id', 1).maybeSingle()
+      const { data: comp } = await supabase.from('company_profile').select('*').limit(1).maybeSingle()
       if (!comp?.name) { alert('Спочатку заповніть реквізити компанії на сторінці «Документи»'); return }
       if (!t.carrier) { alert('Вкажіть перевізника рейсу'); return }
       const { data: tpl } = await supabase.from('doc_templates').select('content, title').eq('id', tplId).maybeSingle()

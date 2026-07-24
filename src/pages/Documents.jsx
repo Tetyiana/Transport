@@ -12,13 +12,17 @@ export default function Documents() {
   const [assets, setAssets] = useState({ stamp: false, sign: false })
   const [comp, setComp] = useState({ name: '', edrpou: '', address: '', iban: '', bank: '', director: '', phone: '', vat_mode: 'none' })
   useEffect(() => {
-    supabase.from('company_profile').select('*').eq('id', 1).maybeSingle().then(({ data }) => {
+    supabase.from('company_profile').select('*').limit(1).maybeSingle().then(({ data }) => {
       if (data) setComp({ ...data })
     })
   }, [])
   const saveComp = async () => {
-    const rec = { ...comp, id: 1 }
-    const { error } = await supabase.from('company_profile').upsert(rec)
+    const rec = { ...comp }
+    delete rec.id
+    const { error } = rec.org_id
+      ? await supabase.from('company_profile').update(rec).eq('org_id', rec.org_id)
+      : await supabase.from('company_profile').insert(rec)
+    if (!error && !rec.org_id) supabase.from('company_profile').select('*').limit(1).maybeSingle().then(({ data }) => data && setComp({ ...data }))
     alert(error ? error.message : 'Реквізити збережено')
   }
   const setC = (k) => (e) => setComp({ ...comp, [k]: e.target.value })

@@ -17,7 +17,7 @@ export default function Support() {
   const [aiBusy, setAiBusy] = useState(false)
 
   const load = async () => {
-    const { data: t } = await supabase.from('support_tickets').select('*').order('created_at', { ascending: false })
+    const { data: t } = await supabase.from('support_tickets').select('*, org:org_id(name)').order('created_at', { ascending: false })
     setTickets(t || [])
     const { data: m } = await supabase.from('support_messages').select('*').order('created_at')
     const byT = {}
@@ -61,7 +61,7 @@ export default function Support() {
       (msgs[t.id]?.length ? '\n' + msgs[t.id].map(m => `   ${m.author === 'user' ? '→' : '←'} ${m.body}`).join('\n') : '')
     ).join('\n')
     await navigator.clipboard.writeText(text || 'Відкритих звернень немає')
-    alert('Реєстр відкритих звернень скопійовано — можна вставити в чат Claude')
+    alert('Реєстр відкритих звернень скопійовано — надішліть його розробнику')
   }
 
   return (
@@ -81,7 +81,7 @@ export default function Support() {
         </div>
         <div className="row" style={{ marginTop: 10 }}>
           <button className="small" onClick={create}>Надіслати</button>
-          <button className="small secondary" onClick={copyRegistry}>Скопіювати реєстр для Claude</button>
+          <button className="small secondary" onClick={copyRegistry}>Скопіювати реєстр (надіслати розробнику)</button>
         </div>
       </div>
 
@@ -92,7 +92,7 @@ export default function Support() {
           {tickets.map(t => (
             <tr key={t.id}>
               <td style={{ whiteSpace: 'nowrap' }}>{t.created_at.slice(0, 10)}</td>
-              <td>{t.page && <span className="badge">{t.page}</span>}</td>
+              <td>{t.org?.name && <span className="badge">{t.org.name}</span>} {t.page && <span className="badge">{t.page}</span>}</td>
               <td><a style={{ cursor: 'pointer' }} onClick={() => setOpen(open === t.id ? null : t.id)}>{t.title}</a>
                 {open === t.id && (
                   <div style={{ marginTop: 8 }}>

@@ -169,7 +169,7 @@ async function handleMessage(msg: Record<string, any>) {
     const path = `trip/${t.id}/tg_${Date.now()}.${ext}`
     const { error: uerr } = await db.storage.from('docs').upload(path, bytes, { contentType: msg.document?.mime_type || 'image/jpeg' })
     if (uerr) { await send(chat_id, 'Помилка збереження файлу: ' + uerr.message); return }
-    await setSession(chat_id, 'pick_doc', { path, trip_id: t.id, caption: msg.caption ?? null })
+    await setSession(chat_id, 'pick_doc', { path, trip_id: t.id, caption: msg.caption ?? null, org_id: t.org_id ?? null })
     await tg('sendMessage', {
       chat_id, text: 'Що це за документ?',
       reply_markup: { inline_keyboard: [
@@ -231,11 +231,11 @@ async function handleMessage(msg: Record<string, any>) {
   // --- очікуємо примітку, зберігаємо витрату ---
   if (session?.state === 'await_note') {
     const note = text === '-' ? null : text
-    const { category_id, trip_id, vehicle_id, amount, currency, liters } = session.data
+    const { category_id, trip_id, vehicle_id, amount, currency, liters, org_id } = session.data
     const expense_date = new Date().toISOString().slice(0, 10)
     const rate = await nbuRate(currency, expense_date)
     const rec: Record<string, unknown> = {
-      trip_id, vehicle_id: vehicle_id || null, category_id,
+      trip_id, vehicle_id: vehicle_id || null, category_id, org_id: org_id ?? null,
       amount, currency, expense_date, payment_form: 'cash', note, liters: liters ?? null,
     }
     if (rate) { rec.rate = rate; rec.amount_uah = Math.round(amount * rate * 100) / 100 }
@@ -271,13 +271,14 @@ async function handleMessage(msg: Record<string, any>) {
     const t = await activeTrip(driver.id)
     if (!t) { await send(chat_id, 'Активного рейсу немає — витрату внесе диспетчер у застосунку.'); return }
     const { data: cats } = await db.from('expense_categories')
-      .select('id, name').in('scope', ['carrier', 'both']).order('name')
+      .select('id, name, org_id').in('scope', ['carrier', 'both']).order('name')
+      .then((res) => ({ data: (res.data ?? []).filter((c: any) => !t.org_id || !c.org_id || c.org_id === t.org_id) }))
     const visible = (cats ?? []).filter(c => !/оренд|податк/i.test(c.name))
     const rows: { text: string; callback_data: string }[][] = []
     for (let i = 0; i < visible.length; i += 2) {
       rows.push(visible.slice(i, i + 2).map(c => ({ text: c.name, callback_data: `cat:${c.id}` })))
     }
-    await setSession(chat_id, 'pick_cat', { trip_id: t.id, vehicle_id: t.vehicle?.id ?? null })
+    await setSession(chat_id, 'pick_cat', { trip_id: t.id, vehicle_id: t.vehicle?.id ?? null, org_id: t.org_id ?? null })
     await tg('sendMessage', { chat_id, text: 'Категорія витрати:', reply_markup: { inline_keyboard: rows } })
     return
   }
@@ -307,10 +308,10 @@ async function handleCallback(cb: Record<string, any>) {
     const doc_type = data.slice(4)
     const session = await getSession(chat_id)
     if (session?.state !== 'pick_doc') return
-    const { path, trip_id, caption } = session.data
+    const { path, trip_id, caption, org_id } = session.data
     const labels: Record<string, string> = { cmr_ttn: 'CMR/ТТН', customs_declaration: 'Митна декларація', t1: 'T1', invoice: 'Інвойс', act: 'Акт', other: 'Документ' }
     const { error } = await db.from('documents').insert({
-      trip_id, doc_type,
+      trip_id, doc_type, org_id: org_id ?? null,
       title: caption || `${labels[doc_type] ?? 'Документ'} від водія, ${new Date().toISOString().slice(0, 10)}`,
       file_url: path,
     })
