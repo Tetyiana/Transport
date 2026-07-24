@@ -62,12 +62,14 @@ async function activeTrip(driver_id: string) {
 }
 
 function routePoints(t: Record<string, any>): [string, string, string][] {
+  const loads = [[t.route_from, t.route_from_coords], ...((t.extra_loads ?? []) as any[]).map((p) => [p.place, p.coords])].filter(([a, b]) => a || b)
+  const unloads = [...((t.extra_unloads ?? []) as any[]).map((p) => [p.place, p.coords]), [t.route_to, t.route_to_coords]].filter(([a, b]) => a || b)
   return ([
-    ['Завантаження', t.route_from, t.route_from_coords],
+    ...loads.map(([p, c], i) => [loads.length > 1 ? `Завантаження ${i + 1}` : 'Завантаження', p, c]),
     ['Замитнення', t.customs_out_point, t.customs_out_coords],
     ['Пункт пропуску', t.border_point, t.border_coords],
     ['Розмитнення', t.customs_in_point, t.customs_in_coords],
-    ['Вивантаження', t.route_to, t.route_to_coords],
+    ...unloads.map(([p, c], i) => [unloads.length > 1 ? `Вивантаження ${i + 1}` : 'Вивантаження', p, c]),
   ] as [string, string, string][]).filter(([, place, coords]) => place || coords)
 }
 

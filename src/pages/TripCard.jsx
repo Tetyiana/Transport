@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, Fragment } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { longPress } from '../longpress'
@@ -86,6 +86,8 @@ export default function TripCard() {
     delete upd.customer; delete upd.carrier; delete upd.vehicle; delete upd.driver
     for (const k of ['route_from_coords', 'route_to_coords', 'customs_out_coords', 'border_coords', 'customs_in_coords'])
       upd[k] = fmtCoords(upd[k])
+    for (const k of ['extra_loads', 'extra_unloads'])
+      upd[k] = (upd[k] || []).map(p => ({ place: p.place || '', coords: fmtCoords(p.coords) || '' })).filter(p => p.place || p.coords)
     for (const k in upd) if (upd[k] === '') upd[k] = null
     // якщо змінилась дата вивантаження — оновлюємо курс НБУ
     if (upd.unloading_date && t.currency !== 'UAH' && upd.unloading_date !== t.unloading_date) {
@@ -267,12 +269,14 @@ export default function TripCard() {
   const markPaid = async (p) => { await supabase.from('driver_payroll').update({ paid: true, paid_date: today() }).eq('id', p.id); load() }
 
   const pt = (place, coords) => (coords || place || '').trim()
+  const loadPts = t ? [[t.route_from, t.route_from_coords], ...(t.extra_loads || []).map(p => [p.place, p.coords])].filter(([a, b]) => a || b) : []
+  const unloadPts = t ? [...(t.extra_unloads || []).map(p => [p.place, p.coords]), [t.route_to, t.route_to_coords]].filter(([a, b]) => a || b) : []
   const routePoints = t ? [
-    ['Завантаження', t.route_from, t.route_from_coords],
+    ...loadPts.map(([p, c], i) => [loadPts.length > 1 ? `Завантаження ${i + 1}` : 'Завантаження', p, c]),
     ['Замитнення', t.customs_out_point, t.customs_out_coords],
     ['Пункт пропуску', t.border_point, t.border_coords],
     ['Розмитнення', t.customs_in_point, t.customs_in_coords],
-    ['Вивантаження', t.route_to, t.route_to_coords],
+    ...unloadPts.map(([p, c], i) => [unloadPts.length > 1 ? `Вивантаження ${i + 1}` : 'Вивантаження', p, c]),
   ].filter(([, place, coords]) => place || coords) : []
   const mapsUrl = routePoints.length >= 2
     ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(pt(routePoints[0][1], routePoints[0][2]))}&destination=${encodeURIComponent(pt(routePoints.at(-1)[1], routePoints.at(-1)[2]))}${routePoints.length > 2 ? `&waypoints=${encodeURIComponent(routePoints.slice(1, -1).map(([, p, c]) => pt(p, c)).join('|'))}` : ''}`
@@ -301,6 +305,9 @@ export default function TripCard() {
   }
 
   const setE = (k) => (e) => setEf({ ...ef, [k]: e.target.value })
+  const updPt = (key, i, field) => (e) => { const arr = [...(ef[key] || [])]; arr[i] = { ...arr[i], [field]: e.target.value }; setEf({ ...ef, [key]: arr }) }
+  const addPt = (key) => setEf({ ...ef, [key]: [...(ef[key] || []), { place: '', coords: '' }] })
+  const delPt = (key, i) => setEf({ ...ef, [key]: (ef[key] || []).filter((_, j) => j !== i) })
 
   return (
     <div>
@@ -350,7 +357,17 @@ export default function TripCard() {
             <div><label>Оплату отримано</label><DateInput field="payment_received_date" /></div>
             <div><label>Замитнення/розмитнення</label><input value={ef.customs_info || ''} onChange={setE('customs_info')} placeholder="місце, брокер" /></div>
             <div><label>Координати завантаження</label><input value={ef.route_from_coords || ''} onChange={setE('route_from_coords')} placeholder="50.4501, 30.5234" /></div>
+            {(ef.extra_loads || []).map((p, i) => <Fragment key={'l' + i}>
+              <div><label>Завантаження {i + 2} (місце)</label><input value={p.place || ''} onChange={updPt('extra_loads', i, 'place')} /></div>
+              <div><label>Завантаження {i + 2} (координати) <a onClick={() => delPt('extra_loads', i)} style={{ cursor: 'pointer' }}>✕ прибрати</a></label><input value={p.coords || ''} onChange={updPt('extra_loads', i, 'coords')} /></div>
+            </Fragment>)}
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}><button className="small secondary" onClick={() => addPt('extra_loads')}>+ точка завантаження</button></div>
             <div><label>Координати вивантаження</label><input value={ef.route_to_coords || ''} onChange={setE('route_to_coords')} placeholder="52.2297, 21.0122" /></div>
+            {(ef.extra_unloads || []).map((p, i) => <Fragment key={'u' + i}>
+              <div><label>Вивантаження {i + 1} (місце)</label><input value={p.place || ''} onChange={updPt('extra_unloads', i, 'place')} /></div>
+              <div><label>Вивантаження {i + 1} (координати) <a onClick={() => delPt('extra_unloads', i)} style={{ cursor: 'pointer' }}>✕ прибрати</a></label><input value={p.coords || ''} onChange={updPt('extra_unloads', i, 'coords')} /></div>
+            </Fragment>)}
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}><button className="small secondary" onClick={() => addPt('extra_unloads')}>+ точка розвантаження</button></div>
             <div><label>Замитнення (місце)</label><input value={ef.customs_out_point || ''} onChange={setE('customs_out_point')} /></div>
             <div><label>Замитнення (координати)</label><input value={ef.customs_out_coords || ''} onChange={setE('customs_out_coords')} placeholder="50.45, 30.52" /></div>
             <div><label>Пункт пропуску</label><input value={ef.border_point || ''} onChange={setE('border_point')} placeholder="Ягодин — Dorohusk" /></div>
