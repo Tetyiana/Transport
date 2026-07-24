@@ -37,6 +37,13 @@ export default function Money() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  const removeExpense = async (e) => {
+    if (!confirm(`Видалити витрату ${e.amount} ${e.currency || 'UAH'}${e.note ? ` (${e.note})` : ''}?`)) return
+    const { error } = await supabase.from('expenses').delete().eq('id', e.id)
+    if (error) { alert(error.message); return }
+    load()
+  }
+
   const load = () => {
     supabase.from('incomes').select('*, trip:trip_id(number, route_from, route_to), counterparty:counterparty_id(name)')
       .order('income_date', { ascending: false }).limit(200).then(({ data }) => setIncomes(data || []))
@@ -151,7 +158,7 @@ export default function Money() {
                 <td>{fmt(e.amount)} {e.currency}</td>
                 <td>{payFormLabel(e.payment_form)}</td>
                 <td>{e.note}</td>
-                <td><button className="small secondary" onClick={() => editExpense(e)}>Редагувати</button></td>
+                <td><button className="small secondary" onClick={() => editExpense(e)}>Редагувати</button> <button className="small danger-btn" onClick={() => removeExpense(e)}>✕</button></td>
               </tr>
             ))}</tbody>
           </table>

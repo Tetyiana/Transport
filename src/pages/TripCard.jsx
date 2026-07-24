@@ -130,6 +130,12 @@ export default function TripCard() {
     load()
   }
   const markPrro = async (i) => { await supabase.from('incomes').update({ prro_done: true, in_tax_base: true }).eq('id', i.id); load() }
+  const removeIncome = async (i) => {
+    if (!confirm(`Видалити надходження ${i.amount} ${i.currency}?`)) return
+    const { error } = await supabase.from('incomes').delete().eq('id', i.id)
+    if (error) { alert(error.message); return }
+    load()
+  }
   const uploadDoc = async () => {
     if (!df.file) return
     const path = `${id}/${Date.now()}_${df.file.name}`
@@ -449,7 +455,7 @@ export default function TripCard() {
                 <td>{i.currency === 'UAH' ? '—' : fmt(i.amount_uah)}</td>
                 <td>{payFormLabel(i.payment_form)}</td>
                 <td>{i.prro_required ? (i.prro_done ? <span className="badge ok">проведено</span> : <span className="badge warn">провести!</span>) : '—'}</td>
-                <td>{i.prro_required && !i.prro_done && <button className="small" onClick={() => markPrro(i)}>Проведено через ПРРО</button>}</td>
+                <td>{i.prro_required && !i.prro_done && <button className="small" onClick={() => markPrro(i)}>Проведено через ПРРО</button>} <button className="small danger-btn" onClick={() => removeIncome(i)}>✕</button></td>
               </tr>
             ))}</tbody>
           </table>
