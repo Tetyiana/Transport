@@ -9,6 +9,9 @@ export default function Dashboard() {
   const [active, setActive] = useState([])
   const [prro, setPrro] = useState([])
   const [overdue, setOverdue] = useState([])
+  const [paySoon, setPaySoon] = useState([])
+  const [ttnDue, setTtnDue] = useState([])
+  const [docsExp, setDocsExp] = useState([])
 
   useEffect(() => {
     supabase.from('trips')
@@ -27,7 +30,28 @@ export default function Dashboard() {
       .lt('payment_due_date', new Date().toISOString().slice(0, 10))
       .not('status', 'in', '("closed","cancelled")')
       .then(({ data }) => setOverdue(data || []))
+    const today = new Date().toISOString().slice(0, 10)
+    const plus = (d) => new Date(Date.now() + d * 864e5).toISOString().slice(0, 10)
+    supabase.from('trips')
+      .select('id, number, route_from, route_to, payment_due_date, customer:customer_id(name)')
+      .is('payment_received_date', null)
+      .gte('payment_due_date', today).lte('payment_due_date', plus(5))
+      .not('status', 'in', '("closed","cancelled","paid")')
+      .then(({ data }) => setPaySoon(data || []))
+    supabase.from('trips')
+      .select('id, number, route_from, route_to, ttn_due_date, customer:customer_id(name)')
+      .is('ttn_sent_date', null)
+      .not('ttn_due_date', 'is', null).lte('ttn_due_date', plus(3))
+      .not('status', 'in', '("closed","cancelled","paid")')
+      .then(({ data }) => setTtnDue(data || []))
+    supabase.from('documents')
+      .select('id, title, doc_type, valid_until')
+      .not('valid_until', 'is', null).lte('valid_until', plus(30))
+      .order('valid_until')
+      .then(({ data }) => setDocsExp(data || []))
   }, [])
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const badge = (d) => <span className={`badge ${d < todayStr ? 'danger' : 'warn'}`}>{d < todayStr ? 'прострочено ' : 'до '}{d}</span>
 
   return (
     <div>
@@ -37,6 +61,35 @@ export default function Dashboard() {
         <div className="stat"><div className="num">{overdue.length}</div><div className="lbl">Прострочені оплати</div></div>
         <div className="stat"><div className="num">{prro.length}</div><div className="lbl">Готівка без ПРРО</div></div>
       </div>
+
+      {(paySoon.length > 0 || ttnDue.length > 0 || docsExp.length > 0) && (
+        <div className="panel">
+          <h2 style={{ marginTop: 0 }}>Нагадування</h2>
+          <table><tbody>
+            {paySoon.map(t => (
+              <tr key={'p' + t.id}>
+                <td><span className="badge">Оплата</span></td>
+                <td><Link to={`/trips/${t.id}`}>{t.number || t.route_from + ' → ' + t.route_to}</Link> — {t.customer?.name}</td>
+                <td>{badge(t.payment_due_date)}</td>
+              </tr>
+            ))}
+            {ttnDue.map(t => (
+              <tr key={'t' + t.id}>
+                <td><span className="badge">ТТН</span></td>
+                <td><Link to={`/trips/${t.id}`}>{t.number || t.route_from + ' → ' + t.route_to}</Link> — {t.customer?.name}</td>
+                <td>{badge(t.ttn_due_date)}</td>
+              </tr>
+            ))}
+            {docsExp.map(d => (
+              <tr key={'d' + d.id}>
+                <td><span className="badge">Документ</span></td>
+                <td><Link to="/documents">{d.title || d.doc_type}</Link></td>
+                <td>{badge(d.valid_until)}</td>
+              </tr>
+            ))}
+          </tbody></table>
+        </div>
+      )}
 
       {overdue.length > 0 && (
         <div className="panel">

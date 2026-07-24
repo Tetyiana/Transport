@@ -24,7 +24,7 @@ export default function Documents() {
   const [editId, setEditId] = useState(null)
 
   const edit = (d) => {
-    setF({ doc_type: d.doc_type, title: d.title || '', vehicle_id: d.vehicle_id || '', driver_id: d.driver_id || '', file: null })
+    setF({ doc_type: d.doc_type, title: d.title || '', vehicle_id: d.vehicle_id || '', driver_id: d.driver_id || '', valid_until: d.valid_until || '', file: null })
     setEditId(d.id)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -60,7 +60,7 @@ export default function Documents() {
   const upload = async () => {
     if (editId) {
       const { error } = await supabase.from('documents').update({
-        doc_type: f.doc_type, title: f.title || null,
+        doc_type: f.doc_type, title: f.title || null, valid_until: f.valid_until || null,
         vehicle_id: f.vehicle_id || null, driver_id: f.driver_id || null,
       }).eq('id', editId)
       if (error) { alert(error.message); return }
@@ -73,7 +73,7 @@ export default function Documents() {
     const { error: upErr } = await supabase.storage.from('docs').upload(path, f.file)
     if (upErr) { alert(upErr.message); return }
     const { error } = await supabase.from('documents').insert({
-      doc_type: f.doc_type, title: f.title || f.file.name, file_url: path,
+      doc_type: f.doc_type, title: f.title || f.file.name, file_url: path, valid_until: f.valid_until || null,
       vehicle_id: f.vehicle_id || null, driver_id: f.driver_id || null,
     })
     if (error) { alert(error.message); return }
@@ -101,6 +101,7 @@ export default function Documents() {
               {STAT_DOC_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select></div>
           <div><label>Назва (необов'язково)</label><input value={f.title} onChange={e => setF({ ...f, title: e.target.value })} /></div>
+          <div><label>Дійсний до (для страховок, дозволів)</label><input type="date" value={f.valid_until} onChange={e => setF({ ...f, valid_until: e.target.value })} /></div>
           <div><label>Машина (якщо стосується)</label>
             <select value={f.vehicle_id} onChange={e => setF({ ...f, vehicle_id: e.target.value })}>
               <option value="">—</option>
