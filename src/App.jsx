@@ -36,8 +36,8 @@ export default function App() {
         <NavLink to="/documents">Документи</NavLink>
         <NavLink to="/counterparties">Контрагенти</NavLink>
         <NavLink to="/vehicles">Машини</NavLink>
-        <NavLink to="/help">Інструкція</NavLink>
         <NavLink to="/drivers">Водії</NavLink>
+        <NavLink to="/help">Інструкція</NavLink>
         <button className="logout" onClick={() => supabase.auth.signOut()}>Вийти</button>
       </nav>
       <main className="content">
