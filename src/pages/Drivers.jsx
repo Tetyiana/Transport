@@ -54,13 +54,13 @@ export default function Drivers() {
               <select value={f.pay_scheme} onChange={e => setF({ ...f, pay_scheme: e.target.value })}>
                 {PAY_SCHEMES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select></div>
-            {(f.pay_scheme === 'percent_freight' || f.pay_scheme === 'percent_profit') &&
+            {(f.pay_scheme === 'percent_freight' || f.pay_scheme === 'percent_profit' || f.pay_scheme === 'mixed') &&
               <div><label>Відсоток, %</label><input type="number" value={f.pay_percent} onChange={e => setF({ ...f, pay_percent: e.target.value })} /></div>}
             {f.pay_scheme === 'per_km' && <>
               <div><label>Ставка/км Україна</label><input type="number" value={f.rate_km_ua} onChange={e => setF({ ...f, rate_km_ua: e.target.value })} /></div>
               <div><label>Ставка/км закордон</label><input type="number" value={f.rate_km_abroad} onChange={e => setF({ ...f, rate_km_abroad: e.target.value })} /></div>
             </>}
-            {f.pay_scheme === 'per_trip' &&
+            {(f.pay_scheme === 'per_trip' || f.pay_scheme === 'mixed') &&
               <><div><label>Ставка за рейс</label><input type="number" value={f.rate_per_trip} onChange={e => setF({ ...f, rate_per_trip: e.target.value })} /></div>
               <div><label>Валюта ставки</label><select value={f.rate_per_trip_currency || 'UAH'} onChange={e => setF({ ...f, rate_per_trip_currency: e.target.value })}>{CURRENCIES.map(c => <option key={c}>{c}</option>)}</select></div></>}
             <div><label>Податки</label>

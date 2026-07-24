@@ -4,7 +4,7 @@ import { supabase } from '../supabase'
 import { longPress } from '../longpress'
 import { nbuRate } from '../nbu'
 import { stampPdf } from '../pdfsign'
-import { TRIP_STATUSES, PAY_FORMS, payFormLabel, DOC_TYPES, docTypeLabel, schemeLabel, PAY_SCHEMES, CURRENCIES, TAX_SYSTEMS } from '../dicts'
+import { TRIP_STATUSES, PAY_FORMS, payFormLabel, DOC_TYPES, docTypeLabel, schemeLabel, PAY_SCHEMES, CURRENCIES } from '../dicts'
 
 const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('uk-UA', { maximumFractionDigits: 2 }))
 const today = () => new Date().toISOString().slice(0, 10)
@@ -182,24 +182,6 @@ export default function TripCard() {
   const fuelDiffL = fuelFact != null && fuelNorm ? (fuelFact - fuelNorm) * km / 100 : null
   const fuelPrice = fuelLiters && fuelUah ? fuelUah / fuelLiters : null
 
-  // Податки з фрахту (безготівка)
-  const taxItems = (() => {
-    if (t.mode !== 'carrier' || t.freight_pay_form !== 'bank' || !t.tax_system || revenueUah == null) return null
-    const items = []
-    const hasVat = ['tov_single_vat', 'tov_general_vat', 'fop_single_3_vat', 'fop_general_vat'].includes(t.tax_system)
-    const vat = hasVat ? revenueUah / 6 : 0
-    if (hasVat) items.push(['ПДВ 20% (у складі фрахту)', vat])
-    const net = revenueUah - vat
-    const prof = Math.max(profitUah ?? 0, 0)
-    if (t.tax_system === 'tov_single') items.push(['Єдиний податок 5%', net * 0.05])
-    if (t.tax_system === 'tov_single_vat') items.push(['Єдиний податок 3%', net * 0.03])
-    if (t.tax_system === 'fop_single_5') items.push(['Єдиний податок 5%', net * 0.05], ['Військовий збір 1%', net * 0.01])
-    if (t.tax_system === 'fop_single_3_vat') items.push(['Єдиний податок 3%', net * 0.03], ['Військовий збір 1%', net * 0.01])
-    if (t.tax_system === 'tov_general_vat') items.push(['Податок на прибуток 18% (з прибутку рейсу)', prof * 0.18])
-    if (t.tax_system === 'fop_general_vat') items.push(['ПДФО 18% (з чистого доходу рейсу)', prof * 0.18], ['Військовий збір 5%', prof * 0.05])
-    return items
-  })()
-  const taxTotal = taxItems ? taxItems.reduce((s, [, v]) => s + v, 0) : 0
 
   // Тахо: орієнтовно 65 км/год, до 9 год кермування на добу
   const driveH = km ? km / 65 : null
@@ -218,6 +200,15 @@ export default function TripCard() {
         base = `${amount} ${d.rate_per_trip_currency}`
         amount = rr ? (amount * rr).toFixed(2) : amount
       }
+    }
+    if (pf.scheme === 'mixed') {
+      let fix = Number(d.rate_per_trip || 0)
+      if (fix && d.rate_per_trip_currency && d.rate_per_trip_currency !== 'UAH') {
+        const rr = await nbuRate(d.rate_per_trip_currency, t.unloading_date || today())
+        fix = rr ? fix * rr : fix
+      }
+      base = revenueUah ?? ''
+      amount = (fix + (base && d.pay_percent ? base * d.pay_percent / 100 : 0)).toFixed(2)
     }
     if (pf.scheme === 'percent_profit') {
       base = profitUah != null ? profitUah.toFixed(2) : ''
@@ -318,9 +309,6 @@ export default function TripCard() {
             <div><label>Оплата фрахту</label><select value={ef.freight_pay_form || ''} onChange={setE('freight_pay_form')}>
               <option value="">—</option><option value="bank">безготівка</option><option value="cash">готівка</option><option value="card">картка</option>
             </select></div>
-            {ef.freight_pay_form === 'bank' && <div><label>Система оподаткування</label><select value={ef.tax_system || ''} onChange={setE('tax_system')}>
-              <option value="">—</option>{TAX_SYSTEMS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select></div>}
             <div><label>Оплату отримано</label><DateInput field="payment_received_date" /></div>
             <div><label>Замитнення/розмитнення</label><input value={ef.customs_info || ''} onChange={setE('customs_info')} placeholder="місце, брокер" /></div>
             <div><label>Координати завантаження</label><input value={ef.route_from_coords || ''} onChange={setE('route_from_coords')} placeholder="50.4501, 30.5234" /></div>
@@ -377,19 +365,6 @@ export default function TripCard() {
             {fuelDiffL > 0 ? 'Перевитрата' : 'Економія'}: {Math.abs(fuelDiffL).toFixed(0)} л{fuelPrice ? ` ≈ ${(Math.abs(fuelDiffL) * fuelPrice).toFixed(0)} грн` : ''}
           </p>}
           {fuelFact != null && !fuelNorm && <p className="muted" style={{ marginBottom: 0 }}>Вкажіть норму машини на сторінці «Машини», щоб бачити відхилення.</p>}
-        </div>
-      )}
-      {taxItems && taxItems.length > 0 && (
-        <div className="panel">
-          <h2 style={{ marginTop: 0 }}>Податки з фрахту (орієнтовно)</h2>
-          <table>
-            <tbody>
-              {taxItems.map(([l, v]) => <tr key={l}><td>{l}</td><td style={{ textAlign: 'right' }}>{fmt(v)}</td></tr>)}
-              <tr><td><b>Разом</b></td><td style={{ textAlign: 'right' }}><b>{fmt(taxTotal)}</b></td></tr>
-              <tr><td>Фрахт після податків</td><td style={{ textAlign: 'right' }}>{fmt(revenueUah - taxTotal)}</td></tr>
-            </tbody>
-          </table>
-          <p className="muted" style={{ marginBottom: 0 }}>ЄП — з фрахту без ПДВ; ВЗ єдинника-ФОП 1% з доходу; загальна система — з прибутку рейсу; ПДВ = 1/6 фрахту.</p>
         </div>
       )}
       <div className="panel">

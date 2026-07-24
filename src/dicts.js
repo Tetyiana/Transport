@@ -29,6 +29,7 @@ export const PAY_SCHEMES = [
   ['per_km', 'Ставка за км'],
   ['per_trip', 'Ставка за рейс'],
   ['percent_profit', '% від чистого прибутку'],
+  ['mixed', 'Змішана (ставка за рейс + %)'],
 ]
 export const schemeLabel = (s) => Object.fromEntries(PAY_SCHEMES)[s] || s
 
